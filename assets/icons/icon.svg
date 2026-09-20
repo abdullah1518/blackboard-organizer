@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0284c7" />
+      <stop offset="100%" stop-color="#4f46e5" />
+    </linearGradient>
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fbbf24" />
+      <stop offset="100%" stop-color="#f59e0b" />
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="125%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000000" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+
+  <!-- Background rounded squircle -->
+  <rect x="8" y="8" width="112" height="112" rx="28" fill="url(#bgGrad)" filter="url(#shadow)" />
+
+  <!-- Calendar card -->
+  <rect x="26" y="32" width="76" height="68" rx="14" fill="#0f172a" stroke="rgba(255,255,255,0.15)" stroke-width="2.5" />
+  <path d="M26 48 C26 39.7 32.7 33 41 33 L87 33 C95.3 33 102 39.7 102 48 L102 52 L26 52 Z" fill="#1e293b" />
+
+  <!-- Calendar rings -->
+  <rect x="42" y="24" width="8" height="16" rx="4" fill="url(#goldGrad)" />
+  <rect x="78" y="24" width="8" height="16" rx="4" fill="url(#goldGrad)" />
+
+  <!-- Checkmark / Sync indicator -->
+  <circle cx="64" cy="74" r="16" fill="url(#goldGrad)" />
+  <path d="M57 74 L62 79 L72 69" fill="none" stroke="#0f172a" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" />
+</svg>

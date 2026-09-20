@@ -1,0 +1,52 @@
+{
+  "manifest_version": 3,
+  "name": "Blackboard TaskSync & Calendar Exporter",
+  "version": "1.0.0",
+  "description": "Privacy-first local Chrome extension aggregating Blackboard deadlines into an actionable task manager with 1-click RFC 5545 iCal export.",
+  "action": {
+    "default_popup": "src/popup/index.html",
+    "default_title": "Blackboard TaskSync",
+    "default_icon": {
+      "16": "assets/icons/icon-16.png",
+      "32": "assets/icons/icon-32.png",
+      "48": "assets/icons/icon-48.png",
+      "128": "assets/icons/icon-128.png"
+    }
+  },
+  "side_panel": {
+    "default_path": "src/sidepanel/index.html"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.blackboard.com/*",
+        "*://*/*blackboard*",
+        "*://*/*bb*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "permissions": [
+    "storage",
+    "sidePanel",
+    "alarms",
+    "downloads",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "*://*.blackboard.com/*",
+    "http://*/*",
+    "https://*/*"
+  ],
+  "icons": {
+    "16": "assets/icons/icon-16.png",
+    "32": "assets/icons/icon-32.png",
+    "48": "assets/icons/icon-48.png",
+    "128": "assets/icons/icon-128.png"
+  }
+}

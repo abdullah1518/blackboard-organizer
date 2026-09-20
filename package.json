@@ -1,0 +1,33 @@
+{
+  "name": "blackboard-tasksync",
+  "displayName": "Blackboard TaskSync & Calendar Exporter",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Privacy-first local Chrome extension aggregating Blackboard deadlines into an actionable task manager with 1-click RFC 5545 iCal export.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "test": "node -e \"require('esbuild').buildSync({ entryPoints: ['src/test/calendarExport.test.ts'], bundle: true, outfile: 'dist/test.cjs', format: 'cjs', platform: 'node' }); require('./dist/test.cjs');\" && rm -f dist/test.cjs"
+  },
+  "dependencies": {
+    "clsx": "^2.1.1",
+    "lucide-react": "^1.16.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tailwind-merge": "^2.5.4"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.280",
+    "@types/node": "^22.8.1",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.3",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.47",
+    "tailwindcss": "^3.4.14",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.10"
+  }
+}
