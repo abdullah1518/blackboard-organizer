@@ -15,6 +15,27 @@ import {
   Trash2
 } from 'lucide-react';
 import { Course, Task, TaskType, UrgencyLevel } from '../types/task';
+import { isNumericalOrInternalCode } from '../services/blackboardApi';
+
+export function getDisplayCourseName(course?: Course, task?: Task): string {
+  const courseName = course?.name || task?.courseName;
+  const courseCode = course?.code || task?.courseCode;
+
+  const hasCleanName = courseName && !isNumericalOrInternalCode(courseName);
+  const hasCleanCode = courseCode && !isNumericalOrInternalCode(courseCode);
+
+  if (hasCleanName && hasCleanCode) {
+    return courseCode;
+  }
+  if (hasCleanName) {
+    return courseName;
+  }
+  if (hasCleanCode) {
+    return courseCode;
+  }
+
+  return courseName || courseCode || 'Course';
+}
 
 interface TaskItemProps {
   task: Task;
@@ -165,10 +186,12 @@ export const TaskItem: React.FC<TaskItemProps> = ({
               }}
             >
               <span
-                className="w-1.5 h-1.5 rounded-full"
+                className="w-1.5 h-1.5 rounded-full flex-shrink-0"
                 style={{ backgroundColor: courseColor }}
               />
-              {course?.code || task.courseCode || task.courseName}
+              <span className="truncate max-w-[150px]">
+                {getDisplayCourseName(course, task)}
+              </span>
             </span>
 
             {/* Task Type Tag */}

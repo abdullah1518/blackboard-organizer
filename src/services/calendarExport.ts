@@ -1,5 +1,6 @@
 import { CalendarExportOptions, GeneratedCalendarFile } from '../types/calendar';
 import { Course, Task } from '../types/task';
+import { isNumericalOrInternalCode } from './blackboardApi';
 
 /**
  * Formats a Date object or ISO string to RFC 5545 UTC format: YYYYMMDDTHHMMSSZ
@@ -64,7 +65,10 @@ export function generateVEvent(task: Task, options: CalendarExportOptions): stri
   const dtstart = formatIcsDate(startDate);
   const dtend = formatIcsDate(dueDate);
 
-  const coursePrefix = task.courseCode ? `[${task.courseCode}] ` : `[${task.courseName}] `;
+  const courseLabel = !isNumericalOrInternalCode(task.courseName)
+    ? (!isNumericalOrInternalCode(task.courseCode) ? task.courseCode : task.courseName)
+    : (!isNumericalOrInternalCode(task.courseCode) ? task.courseCode : task.courseName || '');
+  const coursePrefix = courseLabel ? `[${courseLabel}] ` : '';
   const summary = `${coursePrefix}${task.title}`;
 
   // Build description

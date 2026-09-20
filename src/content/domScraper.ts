@@ -1,4 +1,4 @@
-import { classifyBlackboardItem, parseCourseInfo } from '../services/blackboardApi';
+import { classifyBlackboardItem, extractCourseAndTitle } from '../services/blackboardApi';
 import { Task } from '../types/task';
 
 /**
@@ -41,18 +41,18 @@ export const DomScraper = {
 
         if (titleEl && (titleEl.textContent || '').trim()) {
           const rawTitle = titleEl.textContent?.trim() || '';
-          const rawCourse = courseEl?.textContent?.trim() || 'Blackboard Course';
-          const courseInfo = parseCourseInfo(undefined, rawCourse);
+          const rawCourse = courseEl?.textContent?.trim() || '';
+          const parsed = extractCourseAndTitle(rawTitle, undefined, rawCourse);
 
           let dueDate = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString();
           if (dateEl) {
             const dtAttr = dateEl.getAttribute('datetime');
             if (dtAttr) {
-              const parsed = new Date(dtAttr);
-              if (!isNaN(parsed.getTime())) dueDate = parsed.toISOString();
+              const parsedDate = new Date(dtAttr);
+              if (!isNaN(parsedDate.getTime())) dueDate = parsedDate.toISOString();
             } else if (dateEl.textContent) {
-              const parsed = new Date(dateEl.textContent.trim());
-              if (!isNaN(parsed.getTime())) dueDate = parsed.toISOString();
+              const parsedDate = new Date(dateEl.textContent.trim());
+              if (!isNaN(parsedDate.getTime())) dueDate = parsedDate.toISOString();
             }
           }
 
@@ -61,11 +61,11 @@ export const DomScraper = {
 
           scraped.push({
             id: `bb_dom_ultra_${Date.now()}_${index}`,
-            courseId: courseInfo.code,
-            courseName: courseInfo.name,
-            courseCode: courseInfo.code,
-            title: rawTitle,
-            type: classifyBlackboardItem(undefined, rawTitle),
+            courseId: parsed.courseCode || parsed.courseName,
+            courseName: parsed.courseName,
+            courseCode: parsed.courseCode,
+            title: parsed.cleanTitle,
+            type: classifyBlackboardItem(undefined, parsed.cleanTitle),
             dueDate,
             url: fullUrl,
             isCompleted: false,
@@ -128,11 +128,12 @@ export const DomScraper = {
 
       if (titleLink && titleLink.textContent?.trim()) {
         const rawTitle = titleLink.textContent.trim();
+        const parsed = extractCourseAndTitle(rawTitle, undefined, undefined);
         let dueDate = new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString();
 
         if (dateCell && dateCell.textContent) {
-          const parsed = new Date(dateCell.textContent.trim());
-          if (!isNaN(parsed.getTime())) dueDate = parsed.toISOString();
+          const parsedDate = new Date(dateCell.textContent.trim());
+          if (!isNaN(parsedDate.getTime())) dueDate = parsedDate.toISOString();
         }
 
         const href = titleLink.getAttribute('href') || '';
@@ -140,11 +141,11 @@ export const DomScraper = {
 
         scraped.push({
           id: `bb_dom_orig_${Date.now()}_${index}`,
-          courseId: 'LEGACY_COURSE',
-          courseName: 'Blackboard Course',
-          courseCode: 'BB',
-          title: rawTitle,
-          type: classifyBlackboardItem(undefined, rawTitle),
+          courseId: parsed.courseCode || parsed.courseName || 'LEGACY_COURSE',
+          courseName: parsed.courseName,
+          courseCode: parsed.courseCode,
+          title: parsed.cleanTitle,
+          type: classifyBlackboardItem(undefined, parsed.cleanTitle),
           dueDate,
           url: fullUrl,
           isCompleted: false,

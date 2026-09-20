@@ -1,6 +1,7 @@
 import React from 'react';
 import { Search, X, Layers } from 'lucide-react';
 import { Course, TaskFilterState, TaskType } from '../types/task';
+import { isNumericalOrInternalCode } from '../services/blackboardApi';
 
 interface FilterBarProps {
   filter: TaskFilterState;
@@ -63,6 +64,10 @@ export const FilterBar: React.FC<FilterBarProps> = ({
 
         {courses.map((c) => {
           const isSelected = filter.selectedCourseId === c.id;
+          const displayLabel = !isNumericalOrInternalCode(c.name)
+            ? (!isNumericalOrInternalCode(c.code) ? c.code : c.name)
+            : (!isNumericalOrInternalCode(c.code) ? c.code : c.name || 'Course');
+
           return (
             <button
               key={c.id}
@@ -76,12 +81,13 @@ export const FilterBar: React.FC<FilterBarProps> = ({
               style={{
                 backgroundColor: isSelected ? c.color : undefined
               }}
+              title={c.name}
             >
               <span
-                className="w-1.5 h-1.5 rounded-full"
+                className="w-1.5 h-1.5 rounded-full flex-shrink-0"
                 style={{ backgroundColor: isSelected ? '#ffffff' : c.color }}
               />
-              {c.code || c.name}
+              <span className="truncate max-w-[120px]">{displayLabel}</span>
             </button>
           );
         })}
