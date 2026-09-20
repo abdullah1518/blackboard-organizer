@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Settings, ShieldCheck, RefreshCw, Trash2, Globe, Clock, Sparkles } from 'lucide-react';
 import { UserSettings } from '../types/task';
 
@@ -22,6 +22,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [formData, setFormData] = useState<UserSettings>({ ...settings });
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+
+  // Sync formData whenever modal is opened or settings change
+  useEffect(() => {
+    if (isOpen) {
+      setFormData({ ...settings });
+    }
+  }, [isOpen, settings]);
 
   if (!isOpen) return null;
 
@@ -126,12 +133,25 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           <div className="p-3 bg-slate-800/40 border border-slate-700/60 rounded-xl">
             <label className="flex items-center justify-between cursor-pointer">
               <div className="space-y-0.5">
-                <span className="text-xs font-medium text-slate-200 flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                  Demo Mode (Sample Data)
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-medium text-slate-200 flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                    Demo Mode (Sample Data)
+                  </span>
+                  <span
+                    className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md border ${
+                      formData.isDemoMode
+                        ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                        : 'bg-slate-800 text-slate-400 border-slate-700'
+                    }`}
+                  >
+                    {formData.isDemoMode ? 'ON' : 'OFF'}
+                  </span>
+                </div>
                 <p className="text-[10px] text-slate-400">
-                  Loads sample university courses and deadlines without requiring active login.
+                  {formData.isDemoMode
+                    ? 'Displaying mock courses & deadlines. Toggle off to connect to your real Blackboard.'
+                    : 'Real mode active. Connects directly to your institutional Blackboard session.'}
                 </p>
               </div>
               <input
@@ -140,7 +160,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 onChange={(e) =>
                   setFormData({ ...formData, isDemoMode: e.target.checked })
                 }
-                className="rounded border-slate-700 bg-slate-800 text-sky-500 focus:ring-0 w-4 h-4"
+                className="rounded border-slate-700 bg-slate-800 text-sky-500 focus:ring-0 w-4 h-4 cursor-pointer"
               />
             </label>
           </div>

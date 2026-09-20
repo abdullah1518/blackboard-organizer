@@ -4,7 +4,8 @@ import { DEFAULT_USER_SETTINGS, INITIAL_COURSES, INITIAL_TASKS } from './mockDat
 const STORAGE_KEYS = {
   TASKS: 'bb_tasksync_tasks',
   COURSES: 'bb_tasksync_courses',
-  SETTINGS: 'bb_tasksync_settings'
+  SETTINGS: 'bb_tasksync_settings',
+  INITIALIZED: 'bb_tasksync_initialized'
 } as const;
 
 /**
@@ -12,6 +13,39 @@ const STORAGE_KEYS = {
  */
 const isChromeStorageAvailable = (): boolean => {
   return typeof chrome !== 'undefined' && !!chrome.storage?.local;
+};
+
+// Safe fallback for window.localStorage / Node environment
+const memoryStore: Record<string, string> = {};
+
+const getLocalItem = (key: string): string | null => {
+  if (typeof window !== 'undefined' && window.localStorage) {
+    try {
+      return window.localStorage.getItem(key);
+    } catch {}
+  }
+  if (typeof localStorage !== 'undefined' && localStorage && typeof localStorage.getItem === 'function') {
+    try {
+      return localStorage.getItem(key);
+    } catch {}
+  }
+  return memoryStore[key] ?? null;
+};
+
+const setLocalItem = (key: string, value: string): void => {
+  if (typeof window !== 'undefined' && window.localStorage) {
+    try {
+      window.localStorage.setItem(key, value);
+      return;
+    } catch {}
+  }
+  if (typeof localStorage !== 'undefined' && localStorage && typeof localStorage.setItem === 'function') {
+    try {
+      localStorage.setItem(key, value);
+      return;
+    } catch {}
+  }
+  memoryStore[key] = value;
 };
 
 /**
@@ -25,25 +59,34 @@ export const StorageService = {
   async getTasks(): Promise<Task[]> {
     if (isChromeStorageAvailable()) {
       return new Promise((resolve) => {
-        chrome.storage.local.get([STORAGE_KEYS.TASKS], (result) => {
-          if (result && result[STORAGE_KEYS.TASKS]) {
+        chrome.storage.local.get([STORAGE_KEYS.TASKS, STORAGE_KEYS.INITIALIZED], (result) => {
+          if (result && result[STORAGE_KEYS.TASKS] !== undefined) {
             resolve(result[STORAGE_KEYS.TASKS]);
+          } else if (result && result[STORAGE_KEYS.INITIALIZED]) {
+            // Storage has been initialized before, user has 0 tasks
+            resolve([]);
           } else {
             // First time initialization with initial seed
+            chrome.storage.local.set({ [STORAGE_KEYS.INITIALIZED]: true });
             this.saveTasks(INITIAL_TASKS).then(() => resolve(INITIAL_TASKS));
           }
         });
       });
     } else {
-      const data = localStorage.getItem(STORAGE_KEYS.TASKS);
-      if (data) {
+      const isInit = getLocalItem(STORAGE_KEYS.INITIALIZED);
+      const data = getLocalItem(STORAGE_KEYS.TASKS);
+      if (data !== null) {
         try {
           return JSON.parse(data);
         } catch {
-          return INITIAL_TASKS;
+          return [];
         }
       }
-      localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(INITIAL_TASKS));
+      if (isInit) {
+        return [];
+      }
+      setLocalItem(STORAGE_KEYS.INITIALIZED, 'true');
+      setLocalItem(STORAGE_KEYS.TASKS, JSON.stringify(INITIAL_TASKS));
       return INITIAL_TASKS;
     }
   },
@@ -57,7 +100,7 @@ export const StorageService = {
         chrome.storage.local.set({ [STORAGE_KEYS.TASKS]: tasks }, () => resolve());
       });
     } else {
-      localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(tasks));
+      setLocalItem(STORAGE_KEYS.TASKS, JSON.stringify(tasks));
     }
     await this.updateExtensionBadge(tasks);
   },
@@ -200,7 +243,7 @@ export const StorageService = {
         });
       });
     } else {
-      const data = localStorage.getItem(STORAGE_KEYS.COURSES);
+      const data = getLocalItem(STORAGE_KEYS.COURSES);
       if (data) {
         try {
           return JSON.parse(data);
@@ -208,7 +251,7 @@ export const StorageService = {
           return INITIAL_COURSES;
         }
       }
-      localStorage.setItem(STORAGE_KEYS.COURSES, JSON.stringify(INITIAL_COURSES));
+      setLocalItem(STORAGE_KEYS.COURSES, JSON.stringify(INITIAL_COURSES));
       return INITIAL_COURSES;
     }
   },
@@ -222,7 +265,7 @@ export const StorageService = {
         chrome.storage.local.set({ [STORAGE_KEYS.COURSES]: courses }, () => resolve());
       });
     } else {
-      localStorage.setItem(STORAGE_KEYS.COURSES, JSON.stringify(courses));
+      setLocalItem(STORAGE_KEYS.COURSES, JSON.stringify(courses));
     }
   },
 
@@ -241,7 +284,7 @@ export const StorageService = {
         });
       });
     } else {
-      const data = localStorage.getItem(STORAGE_KEYS.SETTINGS);
+      const data = getLocalItem(STORAGE_KEYS.SETTINGS);
       if (data) {
         try {
           return { ...DEFAULT_USER_SETTINGS, ...JSON.parse(data) };
@@ -249,7 +292,7 @@ export const StorageService = {
           return DEFAULT_USER_SETTINGS;
         }
       }
-      localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(DEFAULT_USER_SETTINGS));
+      setLocalItem(STORAGE_KEYS.SETTINGS, JSON.stringify(DEFAULT_USER_SETTINGS));
       return DEFAULT_USER_SETTINGS;
     }
   },
@@ -263,7 +306,7 @@ export const StorageService = {
         chrome.storage.local.set({ [STORAGE_KEYS.SETTINGS]: settings }, () => resolve());
       });
     } else {
-      localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings));
+      setLocalItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings));
     }
   },
 
@@ -277,22 +320,58 @@ export const StorageService = {
   },
 
   /**
-   * Clear all stored data
+   * Clear all stored tasks and courses (keeps settings and sets isDemoMode: false)
    */
   async clearAllData(): Promise<void> {
+    const settings = await this.getSettings();
+    settings.isDemoMode = false;
+    await this.saveTasks([]);
+    await this.saveCourses([]);
+    await this.saveSettings(settings);
+
     if (isChromeStorageAvailable()) {
       await new Promise<void>((resolve) => {
-        chrome.storage.local.remove(
-          [STORAGE_KEYS.TASKS, STORAGE_KEYS.COURSES, STORAGE_KEYS.SETTINGS],
+        chrome.storage.local.set(
+          {
+            [STORAGE_KEYS.TASKS]: [],
+            [STORAGE_KEYS.COURSES]: [],
+            [STORAGE_KEYS.SETTINGS]: settings,
+            [STORAGE_KEYS.INITIALIZED]: true
+          },
           () => resolve()
         );
       });
     } else {
-      localStorage.removeItem(STORAGE_KEYS.TASKS);
-      localStorage.removeItem(STORAGE_KEYS.COURSES);
-      localStorage.removeItem(STORAGE_KEYS.SETTINGS);
+      setLocalItem(STORAGE_KEYS.TASKS, JSON.stringify([]));
+      setLocalItem(STORAGE_KEYS.COURSES, JSON.stringify([]));
+      setLocalItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings));
+      setLocalItem(STORAGE_KEYS.INITIALIZED, 'true');
     }
     await this.updateExtensionBadge([]);
+  },
+
+  /**
+   * Removes initial sample demo tasks when user switches to real mode
+   */
+  async removeDemoTasks(): Promise<void> {
+    const tasks = await this.getTasks();
+    const demoIds = new Set(INITIAL_TASKS.map((t) => t.id));
+    const remaining = tasks.filter((t) => !demoIds.has(t.id));
+    await this.saveTasks(remaining);
+
+    // Filter courses as well
+    const remainingCourseIds = new Set(remaining.map((t) => t.courseId));
+    const courses = await this.getCourses();
+    const remainingCourses = courses.filter((c) => remainingCourseIds.has(c.id));
+    await this.saveCourses(remainingCourses);
+  },
+
+  /**
+   * Restores initial sample demo tasks when user turns demo mode back on
+   */
+  async restoreDemoTasks(): Promise<void> {
+    await this.saveTasks(INITIAL_TASKS);
+    await this.saveCourses(INITIAL_COURSES);
   },
 
   /**

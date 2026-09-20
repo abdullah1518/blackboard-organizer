@@ -329,8 +329,13 @@ export const App: React.FC = () => {
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
         settings={settings}
-        onSaveSettings={async (s) => {
-          await StorageService.saveSettings(s);
+        onSaveSettings={async (newSettings) => {
+          if (settings.isDemoMode && !newSettings.isDemoMode) {
+            await StorageService.removeDemoTasks();
+          } else if (!settings.isDemoMode && newSettings.isDemoMode) {
+            await StorageService.restoreDemoTasks();
+          }
+          await StorageService.saveSettings(newSettings);
           await loadData();
         }}
         onResetDemoData={async () => {

@@ -37,8 +37,8 @@ export const TaskList: React.FC<TaskListProps> = ({
           <Inbox className="w-6 h-6" />
         </div>
         <h3 className="text-sm font-medium text-slate-300">No tasks found</h3>
-        <p className="text-xs text-slate-400 mt-1 max-w-[240px]">
-          No assignments or exams match your current filter criteria.
+        <p className="text-xs text-slate-400 mt-1 max-w-[260px] leading-relaxed">
+          Ready for sync! Log into your university's Blackboard in a tab and click the <strong>Sync (🔄)</strong> button, or click <strong>Add Task</strong> to add personal deadlines.
         </p>
       </div>
     );
