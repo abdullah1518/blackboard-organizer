@@ -163,6 +163,7 @@ export const TaskItem: React.FC<TaskItemProps> = ({
 
   const urgencyBadge = getUrgencyBadge(task.dueDate, task.isCompleted);
   const UrgencyIcon = urgencyBadge.icon;
+  const isOverdue = !task.isCompleted && getUrgencyLevel(task.dueDate, task.isCompleted) === 'overdue';
   const courseColor = course?.color || '#38BDF8';
   const hasSubtasks = task.subtasks && task.subtasks.length > 0;
   const completedSubtasks = task.subtasks ? task.subtasks.filter((s) => s.completed).length : 0;
@@ -230,13 +231,29 @@ export const TaskItem: React.FC<TaskItemProps> = ({
               </span>
             )}
 
-            {/* Urgency Badge */}
-            <span
-              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] ml-auto font-medium ${urgencyBadge.className}`}
-            >
-              <UrgencyIcon className="w-3 h-3" />
-              {urgencyBadge.text}
-            </span>
+            {/* Urgency Badge & Mark Submitted Action */}
+            <div className="ml-auto flex items-center gap-1.5 flex-shrink-0">
+              {isOverdue && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onToggleComplete(task.id);
+                  }}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/25 hover:border-emerald-500/50 transition-all cursor-pointer"
+                  title="Already submitted on Blackboard? Click to mark as submitted"
+                >
+                  <Check className="w-3 h-3 stroke-[2.5]" />
+                  Mark Submitted
+                </button>
+              )}
+              <span
+                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium ${urgencyBadge.className}`}
+              >
+                <UrgencyIcon className="w-3 h-3" />
+                {urgencyBadge.text}
+              </span>
+            </div>
           </div>
 
           {/* Task Title */}

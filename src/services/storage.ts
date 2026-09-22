@@ -6,7 +6,8 @@ const STORAGE_KEYS = {
   TASKS: 'bb_tasksync_tasks',
   COURSES: 'bb_tasksync_courses',
   SETTINGS: 'bb_tasksync_settings',
-  INITIALIZED: 'bb_tasksync_initialized'
+  INITIALIZED: 'bb_tasksync_initialized',
+  DELETED_TASK_IDS: 'bb_tasksync_deleted_task_ids'
 } as const;
 
 /**
@@ -107,22 +108,77 @@ export const StorageService = {
   },
 
   /**
-   * Upsert tasks from Blackboard sync while preserving completion flags and custom subtasks
+   * Get list of deleted task IDs and signatures (tombstones)
+   */
+  async getDeletedTaskIds(): Promise<string[]> {
+    if (isChromeStorageAvailable()) {
+      return new Promise((resolve) => {
+        chrome.storage.local.get([STORAGE_KEYS.DELETED_TASK_IDS], (result) => {
+          resolve(result?.[STORAGE_KEYS.DELETED_TASK_IDS] || []);
+        });
+      });
+    } else {
+      const data = getLocalItem(STORAGE_KEYS.DELETED_TASK_IDS);
+      if (data) {
+        try {
+          return JSON.parse(data);
+        } catch {
+          return [];
+        }
+      }
+      return [];
+    }
+  },
+
+  /**
+   * Save deleted task IDs and signatures
+   */
+  async saveDeletedTaskIds(ids: string[]): Promise<void> {
+    if (isChromeStorageAvailable()) {
+      await new Promise<void>((resolve) => {
+        chrome.storage.local.set({ [STORAGE_KEYS.DELETED_TASK_IDS]: ids }, () => resolve());
+      });
+    } else {
+      setLocalItem(STORAGE_KEYS.DELETED_TASK_IDS, JSON.stringify(ids));
+    }
+  },
+
+  /**
+   * Clear deleted task tombstones (e.g. on full reset)
+   */
+  async clearDeletedTaskIds(): Promise<void> {
+    await this.saveDeletedTaskIds([]);
+  },
+
+  /**
+   * Upsert tasks from Blackboard sync while preserving completion flags, custom subtasks,
+   * and honoring deleted task tombstones so deleted items never reappear on sync.
    */
   async upsertTasks(newTasks: Task[]): Promise<{ added: number; updated: number }> {
     const existing = await this.getTasks();
     const existingMap = new Map<string, Task>(existing.map((t) => [t.id, t]));
+    const deletedList = await this.getDeletedTaskIds();
+    const deletedSet = new Set(deletedList.map((id) => id.toLowerCase()));
+
     let added = 0;
     let updated = 0;
 
     for (const incoming of newTasks) {
+      const idKey = incoming.id.toLowerCase();
+      const titleSig = `${incoming.title.trim().toLowerCase()}:::${(incoming.courseCode || incoming.courseId || '').trim().toLowerCase()}`;
+
+      // If user previously deleted this item, DO NOT revive it!
+      if (deletedSet.has(idKey) || deletedSet.has(titleSig)) {
+        continue;
+      }
+
       if (existingMap.has(incoming.id)) {
         const current = existingMap.get(incoming.id)!;
         // Preserve user completion state and personal modifications
         existingMap.set(incoming.id, {
           ...incoming,
-          isCompleted: current.isCompleted,
-          completedAt: current.completedAt,
+          isCompleted: current.isCompleted || incoming.isCompleted,
+          completedAt: current.completedAt || (current.isCompleted ? current.completedAt : incoming.completedAt),
           subtasks: current.subtasks || incoming.subtasks,
           // Preserve custom title/notes if modified
           description: incoming.description || current.description,
@@ -184,12 +240,26 @@ export const StorageService = {
   },
 
   /**
-   * Delete a task
+   * Delete a task and record tombstone so it never reappears on sync
    */
   async deleteTask(id: string): Promise<void> {
     const tasks = await this.getTasks();
+    const taskToDelete = tasks.find((t) => t.id === id);
     const filtered = tasks.filter((t) => t.id !== id);
     await this.saveTasks(filtered);
+
+    // Record tombstone so future syncs do not resurrect this task
+    const deletedList = await this.getDeletedTaskIds();
+    const idSet = new Set(deletedList);
+    idSet.add(id);
+    idSet.add(id.toLowerCase());
+
+    if (taskToDelete) {
+      const titleSig = `${taskToDelete.title.trim().toLowerCase()}:::${(taskToDelete.courseCode || taskToDelete.courseId || '').trim().toLowerCase()}`;
+      idSet.add(titleSig);
+    }
+
+    await this.saveDeletedTaskIds(Array.from(idSet));
   },
 
   /**
@@ -405,6 +475,7 @@ export const StorageService = {
             [STORAGE_KEYS.TASKS]: [],
             [STORAGE_KEYS.COURSES]: [],
             [STORAGE_KEYS.SETTINGS]: settings,
+            [STORAGE_KEYS.DELETED_TASK_IDS]: [],
             [STORAGE_KEYS.INITIALIZED]: true
           },
           () => resolve()
@@ -414,6 +485,7 @@ export const StorageService = {
       setLocalItem(STORAGE_KEYS.TASKS, JSON.stringify([]));
       setLocalItem(STORAGE_KEYS.COURSES, JSON.stringify([]));
       setLocalItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings));
+      setLocalItem(STORAGE_KEYS.DELETED_TASK_IDS, JSON.stringify([]));
       setLocalItem(STORAGE_KEYS.INITIALIZED, 'true');
     }
     await this.updateExtensionBadge([]);

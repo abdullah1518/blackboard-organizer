@@ -601,6 +601,16 @@ export const BlackboardApiService = {
         ? `${cleanBaseUrl}/webapps/calendar/launch/attempt/${item.id}`
         : cleanBaseUrl;
 
+      const isLegacySubmitted =
+        item.completed === true ||
+        item.isCompleted === true ||
+        item.status === 'COMPLETED' ||
+        item.status === 'GRADED' ||
+        item.status === 'SUBMITTED' ||
+        item.attemptCount > 0 ||
+        item.grade !== undefined ||
+        /\b(submitted|graded|completed)\b/i.test(item.description || '');
+
       return {
         id: `bb_leg_${item.id || Math.random().toString(36).substring(2)}`,
         courseId: item.courseId || parsed.courseCode || parsed.courseName,
@@ -610,7 +620,8 @@ export const BlackboardApiService = {
         type: classifyBlackboardItem(item.eventType, parsed.cleanTitle),
         dueDate,
         url: directUrl,
-        isCompleted: false,
+        isCompleted: isLegacySubmitted,
+        completedAt: isLegacySubmitted ? new Date().toISOString() : undefined,
         source: 'BLACKBOARD',
         lastSynced: new Date().toISOString(),
         description: item.description
@@ -649,6 +660,27 @@ export const BlackboardApiService = {
         }
       }
 
+      // Detect if assignment has been submitted or completed
+      const isSubmitted =
+        (item as any).completed === true ||
+        (item as any).isCompleted === true ||
+        (item as any).status === 'COMPLETED' ||
+        (item as any).status === 'SUBMITTED' ||
+        (item as any).status === 'GRADED' ||
+        (item as any).status === 'ATTEMPTED' ||
+        (item as any).attemptStatus === 'SUBMITTED' ||
+        (item as any).attemptStatus === 'COMPLETED' ||
+        (item as any).attemptStatus === 'GRADED' ||
+        (item as any).userCompletionStatus === 'COMPLETED' ||
+        item.dynamicCalendarItemProps?.attemptable === false ||
+        ((item.dynamicCalendarItemProps as any)?.attemptCount || 0) > 0 ||
+        (item.dynamicCalendarItemProps as any)?.isCompleted === true ||
+        (item.dynamicCalendarItemProps as any)?.status === 'COMPLETED' ||
+        (item as any).grade !== undefined ||
+        (item as any).score !== undefined ||
+        (item as any).hasSubmissions === true ||
+        /\b(submitted|graded|completed)\b/i.test(item.description || '');
+
       return {
         id: `bb_${item.id}`,
         courseId: item.courseId || resolvedCode || resolvedName,
@@ -658,7 +690,8 @@ export const BlackboardApiService = {
         type: taskType,
         dueDate,
         url: directUrl,
-        isCompleted: false,
+        isCompleted: isSubmitted,
+        completedAt: isSubmitted ? new Date().toISOString() : undefined,
         source: 'BLACKBOARD',
         lastSynced: new Date().toISOString(),
         description: item.description

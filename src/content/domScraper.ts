@@ -7,6 +7,90 @@ import {
 import { Course, Task } from '../types/task';
 
 /**
+ * Check if a DOM element or row indicates the item has been submitted or graded
+ */
+export function isDomElementSubmitted(element: Element): boolean {
+  try {
+    const isSubmittedText = (text: string) => {
+      const lower = text.toLowerCase().trim();
+      if (!lower) return false;
+      if (lower.includes('not submitted') || lower.includes('unsubmitted')) return false;
+      return (
+        lower.includes('submitted') ||
+        lower.includes('graded') ||
+        lower.includes('completed') ||
+        lower.includes('attempt submitted') ||
+        lower.includes('grade posted') ||
+        lower.includes('view attempt') ||
+        lower.includes('view submission') ||
+        lower.includes('view assessment results') ||
+        /\b(?:submitted|graded|completed)\b/i.test(lower)
+      );
+    };
+
+    // 1. Check aria-label / title attributes on root and children
+    const ariaLabels = [
+      element.getAttribute('aria-label'),
+      element.getAttribute('title'),
+      element.getAttribute('data-status')
+    ].filter(Boolean) as string[];
+
+    for (const label of ariaLabels) {
+      if (isSubmittedText(label)) return true;
+    }
+
+    // 2. Check status elements, icons, pills, badges
+    const statusSelectors = [
+      '.stream-item-status',
+      '.status',
+      '.grade',
+      '.cellGrade',
+      '.cellGradeDate',
+      '.badge',
+      '.pill',
+      '.submission-status',
+      '.is-completed',
+      '.completed',
+      '[data-analytics-id*="status"]',
+      '[aria-label*="Submitted" i]',
+      '[aria-label*="Graded" i]',
+      '[aria-label*="Completed" i]'
+    ];
+
+    const statusEl = element.querySelector(statusSelectors.join(', '));
+    if (statusEl) {
+      const aria = statusEl.getAttribute('aria-label') || statusEl.getAttribute('title') || '';
+      if (isSubmittedText(aria)) return true;
+      const txt = statusEl.textContent || '';
+      if (isSubmittedText(txt)) return true;
+    }
+
+    // 3. Check for specific completed/submitted class markers
+    if (
+      element.classList.contains('completed') ||
+      element.classList.contains('is-completed') ||
+      element.querySelector('.completed, .is-completed, [data-is-complete="true"]')
+    ) {
+      return true;
+    }
+
+    // 4. Check entire element text for strong submission indicators
+    const fullText = element.textContent || '';
+    if (
+      /(?:attempt\s*submitted|grade\s*posted|submitted\s*on|submitted\s*at|past\s*due\s*and\s*submitted)/i.test(
+        fullText
+      ) &&
+      !/(?:not\s*submitted|unsubmitted)/i.test(fullText)
+    ) {
+      return true;
+    }
+  } catch {
+    // ignore
+  }
+  return false;
+}
+
+/**
  * Fallback DOM Scraper for Blackboard Ultra Stream and Legacy pages
  */
 export const DomScraper = {
@@ -83,6 +167,7 @@ export const DomScraper = {
     return Array.from(new Set(courseMap.values()));
   },
 
+
   /**
    * Scrapes Blackboard Ultra Activity Stream cards (/ultra/stream)
    */
@@ -120,8 +205,13 @@ export const DomScraper = {
           const href = linkEl?.getAttribute('href') || window.location.href;
           const fullUrl = href.startsWith('http') ? href : `${window.location.origin}${href}`;
 
+          const isCompleted = isDomElementSubmitted(item);
+          const courseSlug = (parsed.courseCode || parsed.courseName || 'course').toLowerCase().replace(/[^a-z0-9]/g, '');
+          const titleSlug = parsed.cleanTitle.toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 40);
+          const deterministicId = `bb_dom_ultra_${courseSlug}_${titleSlug || index}`;
+
           scraped.push({
-            id: `bb_dom_ultra_${Date.now()}_${index}`,
+            id: deterministicId,
             courseId: parsed.courseCode || parsed.courseName,
             courseName: parsed.courseName,
             courseCode: parsed.courseCode,
@@ -129,7 +219,8 @@ export const DomScraper = {
             type: classifyBlackboardItem(undefined, parsed.cleanTitle),
             dueDate,
             url: fullUrl,
-            isCompleted: false,
+            isCompleted,
+            completedAt: isCompleted ? new Date().toISOString() : undefined,
             source: 'BLACKBOARD',
             lastSynced: new Date().toISOString()
           });
@@ -157,8 +248,12 @@ export const DomScraper = {
       const rawTitle = titleEl.textContent?.trim() || '';
       if (rawTitle.length < 3) return;
 
+      const isCompleted = isDomElementSubmitted(card);
+      const titleSlug = rawTitle.toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 40);
+      const deterministicId = `bb_dom_cal_${titleSlug || index}`;
+
       scraped.push({
-        id: `bb_dom_cal_${Date.now()}_${index}`,
+        id: deterministicId,
         courseId: 'CALENDAR_EVENT',
         courseName: 'Blackboard Calendar',
         courseCode: 'CAL',
@@ -166,7 +261,8 @@ export const DomScraper = {
         type: classifyBlackboardItem(undefined, rawTitle),
         dueDate: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
         url: window.location.href,
-        isCompleted: false,
+        isCompleted,
+        completedAt: isCompleted ? new Date().toISOString() : undefined,
         source: 'BLACKBOARD',
         lastSynced: new Date().toISOString()
       });
@@ -200,8 +296,13 @@ export const DomScraper = {
         const href = titleLink.getAttribute('href') || '';
         const fullUrl = href.startsWith('http') ? href : `${window.location.origin}${href}`;
 
+        const isCompleted = isDomElementSubmitted(row);
+        const courseSlug = (parsed.courseCode || parsed.courseName || 'orig').toLowerCase().replace(/[^a-z0-9]/g, '');
+        const titleSlug = parsed.cleanTitle.toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 40);
+        const deterministicId = `bb_dom_orig_${courseSlug}_${titleSlug || index}`;
+
         scraped.push({
-          id: `bb_dom_orig_${Date.now()}_${index}`,
+          id: deterministicId,
           courseId: parsed.courseCode || parsed.courseName || 'LEGACY_COURSE',
           courseName: parsed.courseName,
           courseCode: parsed.courseCode,
@@ -209,7 +310,8 @@ export const DomScraper = {
           type: classifyBlackboardItem(undefined, parsed.cleanTitle),
           dueDate,
           url: fullUrl,
-          isCompleted: false,
+          isCompleted,
+          completedAt: isCompleted ? new Date().toISOString() : undefined,
           source: 'BLACKBOARD',
           lastSynced: new Date().toISOString()
         });
