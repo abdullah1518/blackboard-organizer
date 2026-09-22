@@ -24,9 +24,11 @@ import { DomScraper } from './domScraper';
       if (message.type === 'SCRAPE_PAGE_DOM') {
         try {
           const tasks = DomScraper.scrapeDeadlines();
+          const courses = DomScraper.scrapeCoursesFromDom();
           sendResponse({
             success: true,
             tasks,
+            courses,
             domain: currentDomain
           });
         } catch (err: any) {
@@ -37,16 +39,35 @@ import { DomScraper } from './domScraper';
         }
         return true;
       }
+
+      if (message.type === 'SCRAPE_COURSES') {
+        try {
+          const courses = DomScraper.scrapeCoursesFromDom();
+          sendResponse({
+            success: true,
+            courses,
+            domain: currentDomain
+          });
+        } catch (err: any) {
+          sendResponse({
+            success: false,
+            error: err?.message || 'Courses scrape failed'
+          });
+        }
+        return true;
+      }
     });
   }
 
-  // Auto-notify background of active Blackboard session
+  // Auto-notify background of active Blackboard session & detected courses
   if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+    const courses = DomScraper.scrapeCoursesFromDom();
     chrome.runtime.sendMessage({
       type: 'SESSION_DETECTED',
       domain: currentDomain,
       url: window.location.href,
-      hasXsrf: !!xsrfToken
+      hasXsrf: !!xsrfToken,
+      courses: courses.length > 0 ? courses : undefined
     }).catch(() => {
       // Ignored if extension background is waking up
     });

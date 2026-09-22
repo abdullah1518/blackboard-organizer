@@ -1,5 +1,10 @@
-import { classifyBlackboardItem, extractCourseAndTitle } from '../services/blackboardApi';
-import { Task } from '../types/task';
+import {
+  classifyBlackboardItem,
+  extractCourseAndTitle,
+  parseBlackboardCourseString,
+  isNumericalOrInternalCode
+} from '../services/blackboardApi';
+import { Course, Task } from '../types/task';
 
 /**
  * Fallback DOM Scraper for Blackboard Ultra Stream and Legacy pages
@@ -20,6 +25,62 @@ export const DomScraper = {
     }
 
     return tasks;
+  },
+
+  /**
+   * Scrapes Course records from Blackboard Ultra courses page (/ultra/course or /ultra/courses),
+   * activity stream (/ultra/stream), calendar (/ultra/calendar), or legacy pages
+   */
+  scrapeCoursesFromDom(): Course[] {
+    const courseMap = new Map<string, Course>();
+    const colorPalette = ['#3B82F6', '#8B5CF6', '#EC4899', '#10B981', '#F59E0B', '#06B6D4', '#6366F1'];
+
+    const courseElements = document.querySelectorAll(
+      'a[href*="/ultra/courses/"], a[href*="courseMain"], [data-analytics-id*="course"], .course-element-card, div[role="group"], article, tr'
+    );
+
+    courseElements.forEach((el) => {
+      try {
+        const text = el.textContent?.trim() || '';
+        const href = el.getAttribute('href') || el.querySelector('a[href*="course"]')?.getAttribute('href') || '';
+
+        const idMatch = href.match(/\/courses\/([^/?#]+)/) || href.match(/course_id=([^&#]+)/);
+        const internalId = idMatch ? idMatch[1] : undefined;
+
+        const headingEl = el.querySelector('h3, h4, .course-title, strong, a') || el;
+        const headingText = headingEl.textContent?.trim() || '';
+
+        const parsed = parseBlackboardCourseString(headingText).code
+          ? parseBlackboardCourseString(headingText)
+          : parseBlackboardCourseString(text);
+
+        if (parsed.code || (parsed.name && !isNumericalOrInternalCode(parsed.name))) {
+          const colorIndex = courseMap.size % colorPalette.length;
+          const courseId = internalId || parsed.code || `course_${courseMap.size}`;
+          const code = parsed.code || parsed.name!;
+          const name = parsed.name || parsed.code!;
+
+          const courseObj: Course = {
+            id: courseId,
+            code,
+            name,
+            color: colorPalette[colorIndex],
+            term: parsed.term
+          };
+
+          if (!courseMap.has(courseId)) {
+            courseMap.set(courseId, courseObj);
+          }
+          if (internalId && !courseMap.has(internalId)) {
+            courseMap.set(internalId, courseObj);
+          }
+        }
+      } catch {
+        // Continue
+      }
+    });
+
+    return Array.from(new Set(courseMap.values()));
   },
 
   /**

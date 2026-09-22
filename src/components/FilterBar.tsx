@@ -1,7 +1,7 @@
 import React from 'react';
 import { Search, X, Layers } from 'lucide-react';
 import { Course, TaskFilterState, TaskType } from '../types/task';
-import { isNumericalOrInternalCode } from '../services/blackboardApi';
+import { isNumericalOrInternalCode, parseBlackboardCourseString } from '../services/blackboardApi';
 
 interface FilterBarProps {
   filter: TaskFilterState;
@@ -64,9 +64,21 @@ export const FilterBar: React.FC<FilterBarProps> = ({
 
         {courses.map((c) => {
           const isSelected = filter.selectedCourseId === c.id;
-          const displayLabel = !isNumericalOrInternalCode(c.name)
-            ? (!isNumericalOrInternalCode(c.code) ? c.code : c.name)
-            : (!isNumericalOrInternalCode(c.code) ? c.code : c.name || 'Course');
+          const parsed = parseBlackboardCourseString(c.name || c.code || c.id);
+          const hasCleanCode = c.code && !isNumericalOrInternalCode(c.code) && c.code !== 'Course';
+          const hasCleanName = c.name && !isNumericalOrInternalCode(c.name) && c.name !== 'Course';
+
+          const displayLabel =
+            hasCleanCode ? c.code :
+            hasCleanName ? c.name :
+            parsed.code ? parsed.code :
+            parsed.name ? parsed.name :
+            'Course';
+
+          const tooltip =
+            hasCleanCode && hasCleanName && c.code !== c.name
+              ? `${c.code} - ${c.name}`
+              : parsed.fullName || c.name || c.code;
 
           return (
             <button
@@ -81,7 +93,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
               style={{
                 backgroundColor: isSelected ? c.color : undefined
               }}
-              title={c.name}
+              title={tooltip}
             >
               <span
                 className="w-1.5 h-1.5 rounded-full flex-shrink-0"

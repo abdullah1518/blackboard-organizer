@@ -60,14 +60,26 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   if (message.type === 'SESSION_DETECTED') {
     // Content script detected active blackboard tab
-    StorageService.getSettings().then((settings) => {
+    StorageService.getSettings().then(async (settings) => {
       if (!settings.customBlackboardUrl || settings.customBlackboardUrl.includes('learn.blackboard.com')) {
         settings.customBlackboardUrl = message.domain;
-        StorageService.saveSettings(settings);
+        await StorageService.saveSettings(settings);
+      }
+      if (Array.isArray(message.courses) && message.courses.length > 0) {
+        await StorageService.upsertCourses(message.courses);
       }
       sendResponse({ acknowledged: true });
     });
     return true;
+  }
+
+  if (message.type === 'COURSES_DETECTED') {
+    if (Array.isArray(message.courses) && message.courses.length > 0) {
+      StorageService.upsertCourses(message.courses).then(() => {
+        sendResponse({ acknowledged: true });
+      });
+      return true;
+    }
   }
 
   if (message.type === 'OPEN_SIDE_PANEL') {

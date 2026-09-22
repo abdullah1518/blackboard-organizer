@@ -106,10 +106,13 @@ export const App: React.FC = () => {
     if (filter.selectedType !== 'ALL' && t.type !== filter.selectedType) return false;
     if (filter.search.trim()) {
       const q = filter.search.toLowerCase();
+      const qCompact = q.replace(/[\s-_]/g, '');
       const matchTitle = t.title.toLowerCase().includes(q);
       const matchCourse = (t.courseName || '').toLowerCase().includes(q);
+      const matchCourseCode = (t.courseCode || '').toLowerCase().includes(q);
+      const matchCompactCode = (t.courseCode || '').toLowerCase().replace(/[\s-_]/g, '').includes(qCompact);
       const matchDesc = (t.description || '').toLowerCase().includes(q);
-      if (!matchTitle && !matchCourse && !matchDesc) return false;
+      if (!matchTitle && !matchCourse && !matchCourseCode && !matchCompactCode && !matchDesc) return false;
     }
     return true;
   });

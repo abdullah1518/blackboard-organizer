@@ -1,5 +1,6 @@
 import { Course, Task, UserSettings } from '../types/task';
 import { DEFAULT_USER_SETTINGS, INITIAL_COURSES, INITIAL_TASKS } from './mockData';
+import { isNumericalOrInternalCode, parseBlackboardCourseString } from './blackboardApi';
 
 const STORAGE_KEYS = {
   TASKS: 'bb_tasksync_tasks',
@@ -266,6 +267,74 @@ export const StorageService = {
       });
     } else {
       setLocalItem(STORAGE_KEYS.COURSES, JSON.stringify(courses));
+    }
+  },
+
+  /**
+   * Upsert courses and fix existing tasks if they have 'Course' or numerical codes
+   */
+  async upsertCourses(newCourses: Course[]): Promise<void> {
+    if (!newCourses || newCourses.length === 0) return;
+    const currentCourses = await this.getCourses();
+    const map = new Map<string, Course>(currentCourses.map((c) => [c.id, c]));
+
+    newCourses.forEach((c) => {
+      const existing = map.get(c.id);
+      if (!existing) {
+        map.set(c.id, c);
+      } else if (
+        isNumericalOrInternalCode(existing.name) ||
+        existing.name === 'Course' ||
+        isNumericalOrInternalCode(existing.code) ||
+        existing.code === 'Course'
+      ) {
+        map.set(c.id, {
+          ...existing,
+          code: !isNumericalOrInternalCode(c.code) && c.code !== 'Course' ? c.code : existing.code,
+          name: !isNumericalOrInternalCode(c.name) && c.name !== 'Course' ? c.name : existing.name
+        });
+      }
+    });
+
+    const merged = Array.from(map.values());
+    await this.saveCourses(merged);
+
+    // Self-healing: Update any tasks in storage that currently say 'Course'
+    const tasks = await this.getTasks();
+    let tasksUpdated = false;
+
+    const normalizedMap = new Map<string, Course>();
+    merged.forEach((c) => {
+      normalizedMap.set(c.id, c);
+      if (c.code) {
+        normalizedMap.set(c.code.toLowerCase().replace(/[\s-_]/g, ''), c);
+      }
+    });
+
+    const fixedTasks = tasks.map((t) => {
+      const parsedTitle = t.title ? parseBlackboardCourseString(t.title) : undefined;
+      const matched =
+        normalizedMap.get(t.courseId) ||
+        (t.courseCode ? normalizedMap.get(t.courseCode.toLowerCase().replace(/[\s-_]/g, '')) : undefined) ||
+        (parsedTitle?.code ? normalizedMap.get(parsedTitle.code.toLowerCase().replace(/[\s-_]/g, '')) : undefined);
+
+      if (matched) {
+        const needsCodeFix = !t.courseCode || t.courseCode === 'Course' || isNumericalOrInternalCode(t.courseCode);
+        const needsNameFix = !t.courseName || t.courseName === 'Course' || isNumericalOrInternalCode(t.courseName);
+        if (needsCodeFix || needsNameFix) {
+          tasksUpdated = true;
+          return {
+            ...t,
+            courseCode: matched.code,
+            courseName: matched.name
+          };
+        }
+      }
+      return t;
+    });
+
+    if (tasksUpdated) {
+      await this.saveTasks(fixedTasks);
     }
   },
 

@@ -1,6 +1,6 @@
-import { BlackboardApiService } from '../services/blackboardApi';
+import { BlackboardApiService, parseBlackboardCourseString } from '../services/blackboardApi';
 import { StorageService } from '../services/storage';
-import { Task } from '../types/task';
+import { Course, Task } from '../types/task';
 
 export interface SyncResult {
   success: boolean;
@@ -35,9 +35,36 @@ export const SyncEngine = {
     let extractionSource: SyncResult['source'] = 'ULTRA_API';
 
     try {
+      // 0. Pre-fetch real Course records from Blackboard Ultra API & active tab
+      let discoveredCourses: any[] = [];
+      try {
+        discoveredCourses = await BlackboardApiService.fetchUserCourses(targetUrl);
+      } catch {
+        // Continue
+      }
+
+      const tabCourses = await this.queryActiveTabCourses();
+      if (tabCourses.length > 0) {
+        discoveredCourses.push(...tabCourses);
+      }
+
+      if (discoveredCourses.length > 0) {
+        await StorageService.upsertCourses(discoveredCourses);
+      }
+
+      const allKnownCourses = await StorageService.getCourses();
+      const coursesMap = new Map<string, any>();
+      allKnownCourses.forEach((c) => {
+        coursesMap.set(c.id, c);
+        if (c.code) {
+          coursesMap.set(c.code.toLowerCase(), c);
+          coursesMap.set(c.code.toLowerCase().replace(/[\s-_]/g, ''), c);
+        }
+      });
+
       // 1. Try Primary: Blackboard Learn Ultra REST API
       try {
-        fetchedTasks = await BlackboardApiService.fetchUltraCalendarItems(targetUrl);
+        fetchedTasks = await BlackboardApiService.fetchUltraCalendarItems(targetUrl, coursesMap);
         extractionSource = 'ULTRA_API';
       } catch (ultraErr: any) {
         // 2. Try Secondary: Legacy calendar endpoint
@@ -72,20 +99,43 @@ export const SyncEngine = {
       }
 
       if (fetchedTasks.length > 0) {
+        // Enrich tasks with discovered course codes (e.g. BUS 200, ENGL 214, ICS 381, SWE 387)
+        fetchedTasks = fetchedTasks.map((task) => {
+          let matched =
+            coursesMap.get(task.courseId) ||
+            (task.courseCode ? coursesMap.get(task.courseCode.toLowerCase().replace(/[\s-_]/g, '')) : undefined);
+
+          if (!matched) {
+            const parsed = parseBlackboardCourseString(task.title || task.courseName || task.courseId);
+            if (parsed.code) {
+              matched = coursesMap.get(parsed.code.toLowerCase().replace(/[\s-_]/g, ''));
+              if (!matched) {
+                return {
+                  ...task,
+                  courseCode: parsed.code,
+                  courseName: parsed.name || parsed.code
+                };
+              }
+            }
+          }
+
+          if (matched) {
+            return {
+              ...task,
+              courseCode: matched.code,
+              courseName: matched.name
+            };
+          }
+          return task;
+        });
+
         // Upsert tasks into local storage (deduplication)
         const { added, updated } = await StorageService.upsertTasks(fetchedTasks);
 
-        // Extract courses and update course list
+        // Extract any newly discovered courses and update course list
         const extractedCourses = BlackboardApiService.extractCoursesFromTasks(fetchedTasks);
         if (extractedCourses.length > 0) {
-          const currentCourses = await StorageService.getCourses();
-          const currentMap = new Map(currentCourses.map((c) => [c.id, c]));
-          extractedCourses.forEach((c) => {
-            if (!currentMap.has(c.id)) {
-              currentCourses.push(c);
-            }
-          });
-          await StorageService.saveCourses(currentCourses);
+          await StorageService.upsertCourses(extractedCourses);
         }
 
         // Update settings lastSyncTime
@@ -151,5 +201,34 @@ export const SyncEngine = {
     }
 
     return null;
+  },
+
+  /**
+   * Queries active Blackboard browser tabs for scraped courses
+   */
+  async queryActiveTabCourses(): Promise<Course[]> {
+    if (typeof chrome === 'undefined' || !chrome.tabs?.query) {
+      return [];
+    }
+
+    try {
+      const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (!tabs || tabs.length === 0) return [];
+      const activeTab = tabs[0];
+      const tabId = activeTab.id;
+      if (typeof tabId !== 'number') return [];
+
+      const response = (await chrome.tabs.sendMessage(tabId, {
+        type: 'SCRAPE_COURSES'
+      })) as { success?: boolean; courses?: Course[] } | undefined;
+
+      if (response && response.success && Array.isArray(response.courses)) {
+        return response.courses;
+      }
+    } catch {
+      // Tab communication failed or tab is not on Blackboard
+    }
+
+    return [];
   }
 };

@@ -15,26 +15,53 @@ import {
   Trash2
 } from 'lucide-react';
 import { Course, Task, TaskType, UrgencyLevel } from '../types/task';
-import { isNumericalOrInternalCode } from '../services/blackboardApi';
+import { isNumericalOrInternalCode, parseBlackboardCourseString } from '../services/blackboardApi';
 
-export function getDisplayCourseName(course?: Course, task?: Task): string {
+export function getDisplayCourseName(
+  course?: Course,
+  task?: { courseName?: string; courseCode?: string; title?: string; courseId?: string }
+): string {
   const courseName = course?.name || task?.courseName;
   const courseCode = course?.code || task?.courseCode;
 
   const hasCleanName = courseName && !isNumericalOrInternalCode(courseName);
   const hasCleanCode = courseCode && !isNumericalOrInternalCode(courseCode);
 
-  if (hasCleanName && hasCleanCode) {
+  if (hasCleanCode) {
     return courseCode;
   }
   if (hasCleanName) {
     return courseName;
   }
-  if (hasCleanCode) {
-    return courseCode;
+
+  // Fallback: Try parsing from task title, courseName, or courseId
+  if (task?.title || task?.courseName || task?.courseId) {
+    const parsed =
+      (task.title && parseBlackboardCourseString(task.title).code ? parseBlackboardCourseString(task.title) : undefined) ||
+      (task.courseName && parseBlackboardCourseString(task.courseName).code ? parseBlackboardCourseString(task.courseName) : undefined) ||
+      (task.courseId ? parseBlackboardCourseString(task.courseId) : undefined);
+
+    if (parsed?.code) return parsed.code;
+    if (parsed?.name && !isNumericalOrInternalCode(parsed.name)) return parsed.name;
   }
 
-  return courseName || courseCode || 'Course';
+  return 'Course';
+}
+
+export function getDisplayCourseTooltip(
+  course?: Course,
+  task?: { courseName?: string; courseCode?: string; title?: string; courseId?: string }
+): string {
+  const code = course?.code || task?.courseCode;
+  const name = course?.name || task?.courseName;
+
+  const hasCleanCode = code && !isNumericalOrInternalCode(code);
+  const hasCleanName = name && !isNumericalOrInternalCode(name);
+
+  if (hasCleanCode && hasCleanName && code !== name) {
+    return `${code} - ${name}`;
+  }
+  return hasCleanName ? name : hasCleanCode ? code : getDisplayCourseName(course, task);
 }
 
 interface TaskItemProps {
@@ -184,6 +211,7 @@ export const TaskItem: React.FC<TaskItemProps> = ({
                 color: courseColor,
                 border: `1px solid ${courseColor}33`
               }}
+              title={getDisplayCourseTooltip(course, task)}
             >
               <span
                 className="w-1.5 h-1.5 rounded-full flex-shrink-0"
