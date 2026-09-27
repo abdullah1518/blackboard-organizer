@@ -1,5 +1,5 @@
-import { Course, Task, UserSettings } from '../types/task';
-import { DEFAULT_USER_SETTINGS, INITIAL_COURSES, INITIAL_TASKS } from './mockData';
+import { Announcement, Course, Task, UserSettings } from '../types/task';
+import { DEFAULT_USER_SETTINGS, INITIAL_ANNOUNCEMENTS, INITIAL_COURSES, INITIAL_TASKS } from './mockData';
 import { isNumericalOrInternalCode, parseBlackboardCourseString } from './blackboardApi';
 
 const STORAGE_KEYS = {
@@ -7,7 +7,9 @@ const STORAGE_KEYS = {
   COURSES: 'bb_tasksync_courses',
   SETTINGS: 'bb_tasksync_settings',
   INITIALIZED: 'bb_tasksync_initialized',
-  DELETED_TASK_IDS: 'bb_tasksync_deleted_task_ids'
+  DELETED_TASK_IDS: 'bb_tasksync_deleted_task_ids',
+  ANNOUNCEMENTS: 'bb_tasksync_announcements',
+  READ_ANNOUNCEMENT_IDS: 'bb_tasksync_read_announcements'
 } as const;
 
 /**
@@ -450,22 +452,210 @@ export const StorageService = {
   },
 
   /**
+   * Get all announcements
+   */
+  async getAnnouncements(): Promise<Announcement[]> {
+    const readIds = await this.getReadAnnouncementIds();
+    const readSet = new Set(readIds);
+
+    const enrichWithRead = (announcements: Announcement[]): Announcement[] => {
+      return announcements.map((a) => ({
+        ...a,
+        isRead: a.isRead || readSet.has(a.id)
+      }));
+    };
+
+    if (isChromeStorageAvailable()) {
+      return new Promise((resolve) => {
+        chrome.storage.local.get([STORAGE_KEYS.ANNOUNCEMENTS, STORAGE_KEYS.INITIALIZED], (result) => {
+          if (result && result[STORAGE_KEYS.ANNOUNCEMENTS] !== undefined) {
+            resolve(enrichWithRead(result[STORAGE_KEYS.ANNOUNCEMENTS]));
+          } else if (result && result[STORAGE_KEYS.INITIALIZED]) {
+            resolve([]);
+          } else {
+            chrome.storage.local.set({ [STORAGE_KEYS.INITIALIZED]: true });
+            this.saveAnnouncements(INITIAL_ANNOUNCEMENTS).then(() =>
+              resolve(enrichWithRead(INITIAL_ANNOUNCEMENTS))
+            );
+          }
+        });
+      });
+    } else {
+      const isInit = getLocalItem(STORAGE_KEYS.INITIALIZED);
+      const data = getLocalItem(STORAGE_KEYS.ANNOUNCEMENTS);
+      if (data !== null) {
+        try {
+          return enrichWithRead(JSON.parse(data));
+        } catch {
+          return [];
+        }
+      }
+      if (isInit) {
+        return [];
+      }
+      setLocalItem(STORAGE_KEYS.INITIALIZED, 'true');
+      setLocalItem(STORAGE_KEYS.ANNOUNCEMENTS, JSON.stringify(INITIAL_ANNOUNCEMENTS));
+      return enrichWithRead(INITIAL_ANNOUNCEMENTS);
+    }
+  },
+
+  /**
+   * Save announcements
+   */
+  async saveAnnouncements(announcements: Announcement[]): Promise<void> {
+    if (isChromeStorageAvailable()) {
+      await new Promise<void>((resolve) => {
+        chrome.storage.local.set({ [STORAGE_KEYS.ANNOUNCEMENTS]: announcements }, () => resolve());
+      });
+    } else {
+      setLocalItem(STORAGE_KEYS.ANNOUNCEMENTS, JSON.stringify(announcements));
+    }
+  },
+
+  /**
+   * Get read announcement IDs
+   */
+  async getReadAnnouncementIds(): Promise<string[]> {
+    if (isChromeStorageAvailable()) {
+      return new Promise((resolve) => {
+        chrome.storage.local.get([STORAGE_KEYS.READ_ANNOUNCEMENT_IDS], (result) => {
+          resolve(result?.[STORAGE_KEYS.READ_ANNOUNCEMENT_IDS] || []);
+        });
+      });
+    } else {
+      const data = getLocalItem(STORAGE_KEYS.READ_ANNOUNCEMENT_IDS);
+      if (data) {
+        try {
+          return JSON.parse(data);
+        } catch {
+          return [];
+        }
+      }
+      return [];
+    }
+  },
+
+  /**
+   * Save read announcement IDs
+   */
+  async saveReadAnnouncementIds(ids: string[]): Promise<void> {
+    if (isChromeStorageAvailable()) {
+      await new Promise<void>((resolve) => {
+        chrome.storage.local.set({ [STORAGE_KEYS.READ_ANNOUNCEMENT_IDS]: ids }, () => resolve());
+      });
+    } else {
+      setLocalItem(STORAGE_KEYS.READ_ANNOUNCEMENT_IDS, JSON.stringify(ids));
+    }
+  },
+
+  /**
+   * Upsert incoming announcements while preserving read state
+   */
+  async upsertAnnouncements(incomingList: Announcement[]): Promise<{ added: number; updated: number }> {
+    const existing = await this.getAnnouncements();
+    const existingMap = new Map<string, Announcement>(existing.map((a) => [a.id, a]));
+    const readIds = await this.getReadAnnouncementIds();
+    const readSet = new Set(readIds);
+
+    let added = 0;
+    let updated = 0;
+
+    for (const incoming of incomingList) {
+      const isAlreadyRead = readSet.has(incoming.id) || (existingMap.has(incoming.id) && existingMap.get(incoming.id)!.isRead);
+
+      if (existingMap.has(incoming.id)) {
+        existingMap.set(incoming.id, {
+          ...incoming,
+          isRead: isAlreadyRead,
+          lastSynced: new Date().toISOString()
+        });
+        updated++;
+      } else {
+        existingMap.set(incoming.id, {
+          ...incoming,
+          isRead: isAlreadyRead,
+          lastSynced: new Date().toISOString()
+        });
+        added++;
+      }
+    }
+
+    const merged = Array.from(existingMap.values()).sort(
+      (a, b) => new Date(b.created).getTime() - new Date(a.created).getTime()
+    );
+
+    await this.saveAnnouncements(merged);
+    return { added, updated };
+  },
+
+  /**
+   * Mark single announcement as read / unread
+   */
+  async markAnnouncementRead(id: string, isRead = true): Promise<void> {
+    const announcements = await this.getAnnouncements();
+    const updated = announcements.map((a) => (a.id === id ? { ...a, isRead } : a));
+    await this.saveAnnouncements(updated);
+
+    const readIds = await this.getReadAnnouncementIds();
+    const readSet = new Set(readIds);
+    if (isRead) {
+      readSet.add(id);
+    } else {
+      readSet.delete(id);
+    }
+    await this.saveReadAnnouncementIds(Array.from(readSet));
+  },
+
+  /**
+   * Mark all announcements as read
+   */
+  async markAllAnnouncementsRead(): Promise<void> {
+    const announcements = await this.getAnnouncements();
+    const updated = announcements.map((a) => ({ ...a, isRead: true }));
+    await this.saveAnnouncements(updated);
+
+    const allIds = announcements.map((a) => a.id);
+    await this.saveReadAnnouncementIds(allIds);
+  },
+
+  /**
+   * Removes initial sample demo announcements when user switches to real mode
+   */
+  async removeDemoAnnouncements(): Promise<void> {
+    const announcements = await this.getAnnouncements();
+    const demoIds = new Set(INITIAL_ANNOUNCEMENTS.map((a) => a.id));
+    const remaining = announcements.filter((a) => !demoIds.has(a.id));
+    await this.saveAnnouncements(remaining);
+  },
+
+  /**
+   * Restores initial sample demo announcements when user turns demo mode back on
+   */
+  async restoreDemoAnnouncements(): Promise<void> {
+    await this.saveAnnouncements(INITIAL_ANNOUNCEMENTS);
+  },
+
+  /**
    * Reset data to initial mock state (useful for demo & testing)
    */
   async resetToMockData(): Promise<void> {
     await this.saveTasks(INITIAL_TASKS);
     await this.saveCourses(INITIAL_COURSES);
+    await this.saveAnnouncements(INITIAL_ANNOUNCEMENTS);
+    await this.saveReadAnnouncementIds([]);
     await this.saveSettings(DEFAULT_USER_SETTINGS);
   },
 
   /**
-   * Clear all stored tasks and courses (keeps settings and sets isDemoMode: false)
+   * Clear all stored tasks, courses, and announcements (keeps settings and sets isDemoMode: false)
    */
   async clearAllData(): Promise<void> {
     const settings = await this.getSettings();
     settings.isDemoMode = false;
     await this.saveTasks([]);
     await this.saveCourses([]);
+    await this.saveAnnouncements([]);
+    await this.saveReadAnnouncementIds([]);
     await this.saveSettings(settings);
 
     if (isChromeStorageAvailable()) {
@@ -474,6 +664,8 @@ export const StorageService = {
           {
             [STORAGE_KEYS.TASKS]: [],
             [STORAGE_KEYS.COURSES]: [],
+            [STORAGE_KEYS.ANNOUNCEMENTS]: [],
+            [STORAGE_KEYS.READ_ANNOUNCEMENT_IDS]: [],
             [STORAGE_KEYS.SETTINGS]: settings,
             [STORAGE_KEYS.DELETED_TASK_IDS]: [],
             [STORAGE_KEYS.INITIALIZED]: true
@@ -484,6 +676,8 @@ export const StorageService = {
     } else {
       setLocalItem(STORAGE_KEYS.TASKS, JSON.stringify([]));
       setLocalItem(STORAGE_KEYS.COURSES, JSON.stringify([]));
+      setLocalItem(STORAGE_KEYS.ANNOUNCEMENTS, JSON.stringify([]));
+      setLocalItem(STORAGE_KEYS.READ_ANNOUNCEMENT_IDS, JSON.stringify([]));
       setLocalItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings));
       setLocalItem(STORAGE_KEYS.DELETED_TASK_IDS, JSON.stringify([]));
       setLocalItem(STORAGE_KEYS.INITIALIZED, 'true');
@@ -505,6 +699,9 @@ export const StorageService = {
     const courses = await this.getCourses();
     const remainingCourses = courses.filter((c) => remainingCourseIds.has(c.id));
     await this.saveCourses(remainingCourses);
+
+    // Also remove demo announcements
+    await this.removeDemoAnnouncements();
   },
 
   /**
@@ -513,6 +710,7 @@ export const StorageService = {
   async restoreDemoTasks(): Promise<void> {
     await this.saveTasks(INITIAL_TASKS);
     await this.saveCourses(INITIAL_COURSES);
+    await this.restoreDemoAnnouncements();
   },
 
   /**

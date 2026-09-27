@@ -1,4 +1,4 @@
-import { Course, Task, UserSettings } from '../types/task';
+import { Announcement, Course, Task, UserSettings } from '../types/task';
 
 export const INITIAL_COURSES: Course[] = [
   {
@@ -173,3 +173,72 @@ export const INITIAL_TASKS: Task[] = [
     description: 'Master theorem proofs and Strassen matrix multiplication.'
   }
 ];
+
+export const INITIAL_ANNOUNCEMENTS: Announcement[] = [
+  {
+    id: 'bb_ann_1',
+    courseId: 'CS301_FALL26',
+    courseName: 'Operating Systems',
+    courseCode: 'CS 301',
+    title: 'Midterm Exam Schedule & Room Allocation',
+    content: 'Dear students,\n\nThe midterm exam will be held next Tuesday, October 7th at 10:00 AM.\n\nRoom Allocations:\n- Section 01: Bldg 24, Room 120\n- Section 02: Bldg 24, Room 122\n\nPlease arrive 15 minutes before the exam starts. Calculators and notes are NOT permitted. A cheat sheet of standard syscalls will be provided.\n\nBest regards,\nDr. Al-Mansoor',
+    created: getRelativeDate(-5), // 5 hours ago
+    author: 'Dr. Tariq Al-Mansoor',
+    url: 'https://learn.blackboard.com/ultra/courses/_cs301/announcements',
+    isRead: false,
+    lastSynced: new Date().toISOString()
+  },
+  {
+    id: 'bb_ann_2',
+    courseId: 'MATH240_FALL26',
+    courseName: 'Linear Algebra & Diff Eq',
+    courseCode: 'MATH 240',
+    title: 'Quiz 4 Review Session & Office Hours Update',
+    content: 'Hello everyone,\n\nI will hold an extra review session covering Section 5.1 to 5.4 (Eigenvalues, Eigenvectors, and Matrix Diagonalization) this evening at 6:00 PM on Teams.\n\nAlso, my Thursday office hours are shifted from 2:00 PM to 4:00 PM.\n\nGood luck with your preparation!',
+    created: getRelativeDate(-18), // 18 hours ago
+    author: 'Prof. Sarah Jenkins',
+    url: 'https://learn.blackboard.com/ultra/courses/_math240/announcements',
+    isRead: false,
+    lastSynced: new Date().toISOString()
+  },
+  {
+    id: 'bb_ann_3',
+    courseId: 'CS350_FALL26',
+    courseName: 'Design & Analysis of Algorithms',
+    courseCode: 'CS 350',
+    title: 'Problem Set 3 Clarifications: Bellman-Ford Negative Cycle',
+    content: 'Regarding Problem 3 on Problem Set 3: You may assume that the directed graph has at most 100 vertices. If a negative cycle is detected, your algorithm should output the cycle vertices in order.\n\nThe submission deadline remains Friday midnight.',
+    created: getRelativeDate(-30), // 30 hours ago
+    author: 'Dr. Michael Chen',
+    url: 'https://learn.blackboard.com/ultra/courses/_cs350/announcements',
+    isRead: true,
+    lastSynced: new Date().toISOString()
+  },
+  {
+    id: 'bb_ann_4',
+    courseId: 'CS388_FALL26',
+    courseName: 'Human-Computer Interaction',
+    courseCode: 'CS 388',
+    title: 'Prototype Presentation Rubric & Peer Review Teams',
+    content: 'The rubric for the Phase 2 interactive prototype presentations has been uploaded to Course Documents.\n\nPlease check your assigned peer review team in the Groups tab. Each group will provide constructive critique on two other teams prototypes during Thursday lecture.',
+    created: getRelativeDate(-60), // 2.5 days ago
+    author: 'Dr. Elena Rostova',
+    url: 'https://learn.blackboard.com/ultra/courses/_cs388/announcements',
+    isRead: true,
+    lastSynced: new Date().toISOString()
+  },
+  {
+    id: 'bb_ann_5',
+    courseId: 'HIST115_FALL26',
+    courseName: 'Modern Global History',
+    courseCode: 'HIST 115',
+    title: 'Library Database Access for Primary Source Research',
+    content: 'The university library has enabled direct proxy access to the Declassified Documents Reference System (DDRS) and Foreign Relations of the United States archives.\n\nYou can access these off-campus via the library portal under Databases > History.',
+    created: getRelativeDate(-120), // 5 days ago
+    author: 'Prof. David Reynolds',
+    url: 'https://learn.blackboard.com/ultra/courses/_hist115/announcements',
+    isRead: true,
+    lastSynced: new Date().toISOString()
+  }
+];
+

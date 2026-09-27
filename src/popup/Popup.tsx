@@ -4,23 +4,30 @@ import {
   RefreshCw,
   Settings as SettingsIcon,
   Maximize2,
-  Plus
+  Plus,
+  CheckSquare,
+  Megaphone
 } from 'lucide-react';
 import { AddTaskModal } from '../components/AddTaskModal';
+import { AnnouncementsView } from '../components/AnnouncementsView';
 import { ExportModal } from '../components/ExportModal';
 import { FilterBar } from '../components/FilterBar';
 import { SettingsModal } from '../components/SettingsModal';
 import { TaskList } from '../components/TaskList';
 import { StorageService } from '../services/storage';
-import { Course, Task, TaskFilterState, UserSettings } from '../types/task';
+import { Announcement, Course, Task, TaskFilterState, UserSettings } from '../types/task';
 import { DEFAULT_USER_SETTINGS } from '../services/mockData';
 
 export const Popup: React.FC = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [settings, setSettings] = useState<UserSettings>(DEFAULT_USER_SETTINGS);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncNotice, setSyncNotice] = useState<string | null>(null);
+
+  // Active tab in popup: 'tasks' | 'announcements'
+  const [activeTab, setActiveTab] = useState<'tasks' | 'announcements'>('tasks');
 
   // Modals
   const [isExportOpen, setIsExportOpen] = useState(false);
@@ -39,9 +46,11 @@ export const Popup: React.FC = () => {
   const loadData = async () => {
     const loadedTasks = await StorageService.getTasks();
     const loadedCourses = await StorageService.getCourses();
+    const loadedAnnouncements = await StorageService.getAnnouncements();
     const loadedSettings = await StorageService.getSettings();
     setTasks(loadedTasks);
     setCourses(loadedCourses);
+    setAnnouncements(loadedAnnouncements);
     setSettings(loadedSettings);
   };
 
@@ -119,6 +128,16 @@ export const Popup: React.FC = () => {
     await loadData();
   };
 
+  const handleToggleAnnouncementRead = async (id: string, isRead: boolean) => {
+    await StorageService.markAnnouncementRead(id, isRead);
+    await loadData();
+  };
+
+  const handleMarkAllAnnouncementsRead = async () => {
+    await StorageService.markAllAnnouncementsRead();
+    await loadData();
+  };
+
   // Filter tasks
   const filteredTasks = tasks.filter((t) => {
     if (filter.hideCompleted && t.isCompleted) return false;
@@ -140,6 +159,7 @@ export const Popup: React.FC = () => {
     const diff = new Date(t.dueDate).getTime() - Date.now();
     return diff <= 24 * 60 * 60 * 1000;
   }).length;
+  const unreadAnnouncementsCount = announcements.filter((a) => !a.isRead).length;
 
   return (
     <div className="w-[380px] h-[540px] flex flex-col bg-slate-950 text-slate-100 select-none overflow-hidden font-sans border border-slate-800/80">
@@ -207,28 +227,85 @@ export const Popup: React.FC = () => {
         </div>
       )}
 
-      {/* Filter and Course Scroll Area */}
-      <div className="p-3 border-b border-slate-800/80 bg-slate-900/40">
-        <FilterBar
-          filter={filter}
-          courses={courses}
-          onFilterChange={setFilter}
-          compact={true}
-        />
-      </div>
+      {/* Navigation Tab Switcher */}
+      <nav className="flex items-center px-3 bg-slate-900/60 border-b border-slate-800">
+        <button
+          type="button"
+          onClick={() => setActiveTab('tasks')}
+          className={`flex items-center gap-1.5 py-2 px-2.5 text-[11px] font-semibold border-b-2 transition-all cursor-pointer ${
+            activeTab === 'tasks'
+              ? 'border-sky-500 text-sky-400'
+              : 'border-transparent text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <CheckSquare className="w-3 h-3" />
+          <span>Tasks</span>
+          <span className="px-1 py-0.2 rounded-full text-[9px] bg-slate-800 text-slate-300 border border-slate-700 font-mono">
+            {tasks.filter((t) => !t.isCompleted).length}
+          </span>
+        </button>
 
-      {/* Main Task List View (Scrollable) */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-2">
-        <TaskList
-          tasks={filteredTasks}
-          courses={courses}
-          onToggleComplete={handleToggleComplete}
-          onDelete={handleDelete}
-          onToggleSubTask={handleToggleSubTask}
-          onAddSubTask={handleAddSubTask}
-          compact={true}
-        />
-      </div>
+        <button
+          type="button"
+          onClick={() => setActiveTab('announcements')}
+          className={`flex items-center gap-1.5 py-2 px-2.5 text-[11px] font-semibold border-b-2 transition-all cursor-pointer ${
+            activeTab === 'announcements'
+              ? 'border-sky-500 text-sky-400'
+              : 'border-transparent text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <Megaphone className="w-3 h-3" />
+          <span>Announcements</span>
+          {unreadAnnouncementsCount > 0 ? (
+            <span className="px-1 py-0.2 rounded-full text-[9px] bg-sky-500/20 text-sky-300 border border-sky-500/40 font-bold font-mono animate-pulse">
+              {unreadAnnouncementsCount}
+            </span>
+          ) : (
+            <span className="px-1 py-0.2 rounded-full text-[9px] bg-slate-800 text-slate-400 border border-slate-700 font-mono">
+              {announcements.length}
+            </span>
+          )}
+        </button>
+      </nav>
+
+      {/* Tab Content */}
+      {activeTab === 'tasks' ? (
+        <>
+          {/* Filter and Course Scroll Area */}
+          <div className="p-3 border-b border-slate-800/80 bg-slate-900/40">
+            <FilterBar
+              filter={filter}
+              courses={courses}
+              onFilterChange={setFilter}
+              compact={true}
+            />
+          </div>
+
+          {/* Main Task List View (Scrollable) */}
+          <div className="flex-1 overflow-y-auto p-3 space-y-2">
+            <TaskList
+              tasks={filteredTasks}
+              courses={courses}
+              onToggleComplete={handleToggleComplete}
+              onDelete={handleDelete}
+              onToggleSubTask={handleToggleSubTask}
+              onAddSubTask={handleAddSubTask}
+              compact={true}
+            />
+          </div>
+        </>
+      ) : (
+        /* Tab 2: Announcements */
+        <div className="flex-1 overflow-y-auto p-3">
+          <AnnouncementsView
+            announcements={announcements}
+            courses={courses}
+            onToggleRead={handleToggleAnnouncementRead}
+            onMarkAllRead={handleMarkAllAnnouncementsRead}
+            compact={true}
+          />
+        </div>
+      )}
 
       {/* Footer */}
       <footer className="p-2.5 border-t border-slate-800/80 bg-slate-900/90 flex items-center justify-between gap-2">

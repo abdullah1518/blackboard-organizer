@@ -1,5 +1,5 @@
 import { BbCalendarItem, BbCalendarItemsResponse } from '../types/blackboard';
-import { Course, Task, TaskType } from '../types/task';
+import { Announcement, Course, Task, TaskType } from '../types/task';
 
 /**
  * Normalizes item type based on title and Blackboard category
@@ -738,5 +738,142 @@ export const BlackboardApiService = {
     });
 
     return Array.from(courseMap.values());
+  },
+
+  /**
+   * Fetches announcements for a specific course from /learn/api/public/v1/courses/{courseId}/announcements
+   */
+  async fetchCourseAnnouncements(baseUrl: string, course: Course): Promise<Announcement[]> {
+    const cleanBaseUrl = baseUrl.replace(/\/+$/, '');
+    const announcements: Announcement[] = [];
+
+    try {
+      const resp = await fetch(`${cleanBaseUrl}/learn/api/public/v1/courses/${course.id}/announcements`, {
+        method: 'GET',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          'X-Requested-With': 'XMLHttpRequest'
+        }
+      });
+
+      if (resp.ok) {
+        const data = await resp.json();
+        const results = data.results || (Array.isArray(data) ? data : []);
+        results.forEach((item: any) => {
+          if (!item.title) return;
+          const authorName = item.creator?.name
+            ? `${item.creator.name.given || ''} ${item.creator.name.family || ''}`.trim()
+            : undefined;
+
+          announcements.push({
+            id: `bb_ann_${course.id}_${item.id}`,
+            courseId: course.id,
+            courseName: course.name,
+            courseCode: course.code,
+            title: item.title.trim(),
+            content: stripHtml(item.body || item.content || ''),
+            created: item.created || item.modified || new Date().toISOString(),
+            modified: item.modified,
+            author: authorName,
+            url: `${cleanBaseUrl}/ultra/courses/${course.id}/announcements`,
+            isRead: false,
+            lastSynced: new Date().toISOString()
+          });
+        });
+      }
+    } catch {
+      // Continue
+    }
+
+    return announcements;
+  },
+
+  /**
+   * Fetches system / institutional announcements from /learn/api/public/v1/announcements
+   */
+  async fetchSystemAnnouncements(baseUrl: string): Promise<Announcement[]> {
+    const cleanBaseUrl = baseUrl.replace(/\/+$/, '');
+    const announcements: Announcement[] = [];
+
+    try {
+      const resp = await fetch(`${cleanBaseUrl}/learn/api/public/v1/announcements`, {
+        method: 'GET',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          'X-Requested-With': 'XMLHttpRequest'
+        }
+      });
+
+      if (resp.ok) {
+        const data = await resp.json();
+        const results = data.results || (Array.isArray(data) ? data : []);
+        results.forEach((item: any) => {
+          if (!item.title) return;
+          announcements.push({
+            id: `bb_ann_sys_${item.id}`,
+            courseId: 'INSTITUTION',
+            courseName: 'Campus Announcement',
+            courseCode: 'CAMPUS',
+            title: item.title.trim(),
+            content: stripHtml(item.body || item.content || ''),
+            created: item.created || item.modified || new Date().toISOString(),
+            modified: item.modified,
+            url: `${cleanBaseUrl}/ultra/stream`,
+            isRead: false,
+            lastSynced: new Date().toISOString()
+          });
+        });
+      }
+    } catch {
+      // Continue
+    }
+
+    return announcements;
+  },
+
+  /**
+   * Fetches announcements from all courses + institutional announcements concurrently
+   */
+  async fetchAllAnnouncements(baseUrl: string, courses: Course[]): Promise<Announcement[]> {
+    const allAnnouncements: Announcement[] = [];
+
+    const systemPromise = this.fetchSystemAnnouncements(baseUrl);
+    const coursePromises = courses.map((course) => this.fetchCourseAnnouncements(baseUrl, course));
+
+    const settled = await Promise.allSettled([systemPromise, ...coursePromises]);
+
+    for (const res of settled) {
+      if (res.status === 'fulfilled' && Array.isArray(res.value)) {
+        allAnnouncements.push(...res.value);
+      }
+    }
+
+    return allAnnouncements.sort(
+      (a, b) => new Date(b.created).getTime() - new Date(a.created).getTime()
+    );
   }
 };
+
+/**
+ * Strips HTML tags, converts linebreaks, and decodes HTML entities
+ */
+export function stripHtml(html: string): string {
+  if (!html) return '';
+  let text = html
+    .replace(/<br\s*[\/]?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n\n')
+    .replace(/<\/div>/gi, '\n')
+    .replace(/<\/li>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/&apos;/gi, "'");
+  return text.replace(/\n{3,}/g, '\n\n').trim();
+}
+

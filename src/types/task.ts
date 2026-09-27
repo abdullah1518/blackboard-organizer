@@ -54,3 +54,6 @@ export interface TaskFilterState {
   urgencyFilter: UrgencyLevel | 'ALL';
   hideCompleted: boolean;
 }
+
+export * from './announcement';
+

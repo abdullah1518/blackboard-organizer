@@ -4,23 +4,30 @@ import {
   Settings as SettingsIcon,
   Plus,
   Download,
-  Sparkles
+  Sparkles,
+  CheckSquare,
+  Megaphone
 } from 'lucide-react';
 import { AddTaskModal } from '../components/AddTaskModal';
+import { AnnouncementsView } from '../components/AnnouncementsView';
 import { ExportModal } from '../components/ExportModal';
 import { FilterBar } from '../components/FilterBar';
 import { SettingsModal } from '../components/SettingsModal';
 import { TaskList } from '../components/TaskList';
 import { DEFAULT_USER_SETTINGS } from '../services/mockData';
 import { StorageService } from '../services/storage';
-import { Course, Task, TaskFilterState, UserSettings } from '../types/task';
+import { Announcement, Course, Task, TaskFilterState, UserSettings } from '../types/task';
 
 export const App: React.FC = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [settings, setSettings] = useState<UserSettings>(DEFAULT_USER_SETTINGS);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncStatusMsg, setSyncStatusMsg] = useState<string | null>(null);
+
+  // Active workspace tab: tasks or announcements
+  const [activeTab, setActiveTab] = useState<'tasks' | 'announcements'>('tasks');
 
   // Grouping mode
   const [groupBy, setGroupBy] = useState<'urgency' | 'none'>('urgency');
@@ -42,9 +49,11 @@ export const App: React.FC = () => {
   const loadData = async () => {
     const loadedTasks = await StorageService.getTasks();
     const loadedCourses = await StorageService.getCourses();
+    const loadedAnnouncements = await StorageService.getAnnouncements();
     const loadedSettings = await StorageService.getSettings();
     setTasks(loadedTasks);
     setCourses(loadedCourses);
+    setAnnouncements(loadedAnnouncements);
     setSettings(loadedSettings);
   };
 
@@ -98,6 +107,16 @@ export const App: React.FC = () => {
     await loadData();
   };
 
+  const handleToggleAnnouncementRead = async (id: string, isRead: boolean) => {
+    await StorageService.markAnnouncementRead(id, isRead);
+    await loadData();
+  };
+
+  const handleMarkAllAnnouncementsRead = async () => {
+    await StorageService.markAllAnnouncementsRead();
+    await loadData();
+  };
+
   // Filtered task set
   const filteredTasks = tasks.filter((t) => {
     if (filter.hideCompleted && t.isCompleted) return false;
@@ -128,6 +147,7 @@ export const App: React.FC = () => {
     return diff >= 0 && diff <= 24 * 60 * 60 * 1000;
   }).length;
   const completedCount = tasks.filter((t) => t.isCompleted).length;
+  const unreadAnnouncementsCount = announcements.filter((a) => !a.isRead).length;
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-950 text-slate-100 font-sans selection:bg-sky-500 selection:text-white">
@@ -198,103 +218,160 @@ export const App: React.FC = () => {
         )}
       </header>
 
-      {/* Metric Cards Banner */}
-      <section className="px-4 py-3 border-b border-slate-800/80 bg-slate-900/30">
-        <div className="grid grid-cols-4 gap-2 text-center">
-          <div className="p-2 rounded-xl bg-red-500/10 border border-red-500/20">
-            <span className="text-[10px] font-medium text-red-400 block uppercase tracking-wider">
-              Overdue
-            </span>
-            <span className="text-base font-bold text-red-300">{overdueCount}</span>
-          </div>
+      {/* Navigation Tab Switcher */}
+      <nav className="flex items-center px-4 bg-slate-900/60 border-b border-slate-800">
+        <button
+          type="button"
+          onClick={() => setActiveTab('tasks')}
+          className={`flex items-center gap-2 py-2.5 px-3 text-xs font-semibold border-b-2 transition-all cursor-pointer ${
+            activeTab === 'tasks'
+              ? 'border-sky-500 text-sky-400'
+              : 'border-transparent text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <CheckSquare className="w-3.5 h-3.5" />
+          <span>Tasks & Deadlines</span>
+          <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-800 text-slate-300 border border-slate-700 font-mono">
+            {tasks.filter((t) => !t.isCompleted).length}
+          </span>
+        </button>
 
-          <div className="p-2 rounded-xl bg-rose-500/10 border border-rose-500/20">
-            <span className="text-[10px] font-medium text-rose-400 block uppercase tracking-wider">
-              Due Today
+        <button
+          type="button"
+          onClick={() => setActiveTab('announcements')}
+          className={`flex items-center gap-2 py-2.5 px-3 text-xs font-semibold border-b-2 transition-all cursor-pointer ${
+            activeTab === 'announcements'
+              ? 'border-sky-500 text-sky-400'
+              : 'border-transparent text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <Megaphone className="w-3.5 h-3.5" />
+          <span>Announcements</span>
+          {unreadAnnouncementsCount > 0 ? (
+            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-sky-500/20 text-sky-300 border border-sky-500/40 font-bold font-mono animate-pulse">
+              {unreadAnnouncementsCount}
             </span>
-            <span className="text-base font-bold text-rose-300">{dueTodayCount}</span>
-          </div>
-
-          <div className="p-2 rounded-xl bg-sky-500/10 border border-sky-500/20">
-            <span className="text-[10px] font-medium text-sky-400 block uppercase tracking-wider">
-              Pending
+          ) : (
+            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-800 text-slate-400 border border-slate-700 font-mono">
+              {announcements.length}
             </span>
-            <span className="text-base font-bold text-sky-300">
-              {tasks.length - completedCount}
-            </span>
-          </div>
+          )}
+        </button>
+      </nav>
 
-          <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
-            <span className="text-[10px] font-medium text-emerald-400 block uppercase tracking-wider">
-              Completed
-            </span>
-            <span className="text-base font-bold text-emerald-300">{completedCount}</span>
-          </div>
-        </div>
-      </section>
+      {/* Tab 1: Tasks & Deadlines */}
+      {activeTab === 'tasks' ? (
+        <>
+          {/* Metric Cards Banner */}
+          <section className="px-4 py-3 border-b border-slate-800/80 bg-slate-900/30">
+            <div className="grid grid-cols-4 gap-2 text-center">
+              <div className="p-2 rounded-xl bg-red-500/10 border border-red-500/20">
+                <span className="text-[10px] font-medium text-red-400 block uppercase tracking-wider">
+                  Overdue
+                </span>
+                <span className="text-base font-bold text-red-300">{overdueCount}</span>
+              </div>
 
-      {/* Workspace Controls (Search, Filters, Grouping) */}
-      <section className="p-4 border-b border-slate-800/80 space-y-3 bg-slate-900/20">
-        <FilterBar
-          filter={filter}
-          courses={courses}
-          onFilterChange={setFilter}
-          compact={false}
-        />
+              <div className="p-2 rounded-xl bg-rose-500/10 border border-rose-500/20">
+                <span className="text-[10px] font-medium text-rose-400 block uppercase tracking-wider">
+                  Due Today
+                </span>
+                <span className="text-base font-bold text-rose-300">{dueTodayCount}</span>
+              </div>
 
-        <div className="flex items-center justify-between text-xs pt-1">
-          <div className="flex items-center gap-2">
-            <span className="text-slate-400 font-medium">Group By:</span>
-            <div className="inline-flex p-0.5 rounded-lg bg-slate-900 border border-slate-800">
+              <div className="p-2 rounded-xl bg-sky-500/10 border border-sky-500/20">
+                <span className="text-[10px] font-medium text-sky-400 block uppercase tracking-wider">
+                  Pending
+                </span>
+                <span className="text-base font-bold text-sky-300">
+                  {tasks.length - completedCount}
+                </span>
+              </div>
+
+              <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                <span className="text-[10px] font-medium text-emerald-400 block uppercase tracking-wider">
+                  Completed
+                </span>
+                <span className="text-base font-bold text-emerald-300">{completedCount}</span>
+              </div>
+            </div>
+          </section>
+
+          {/* Workspace Controls (Search, Filters, Grouping) */}
+          <section className="p-4 border-b border-slate-800/80 space-y-3 bg-slate-900/20">
+            <FilterBar
+              filter={filter}
+              courses={courses}
+              onFilterChange={setFilter}
+              compact={false}
+            />
+
+            <div className="flex items-center justify-between text-xs pt-1">
+              <div className="flex items-center gap-2">
+                <span className="text-slate-400 font-medium">Group By:</span>
+                <div className="inline-flex p-0.5 rounded-lg bg-slate-900 border border-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => setGroupBy('urgency')}
+                    className={`px-2 py-0.5 rounded-md text-[11px] font-medium transition-colors ${
+                      groupBy === 'urgency'
+                        ? 'bg-slate-800 text-sky-400 shadow-sm'
+                        : 'text-slate-400 hover:text-slate-300'
+                    }`}
+                  >
+                    Urgency
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setGroupBy('none')}
+                    className={`px-2 py-0.5 rounded-md text-[11px] font-medium transition-colors ${
+                      groupBy === 'none'
+                        ? 'bg-slate-800 text-sky-400 shadow-sm'
+                        : 'text-slate-400 hover:text-slate-300'
+                    }`}
+                  >
+                    Chronological
+                  </button>
+                </div>
+              </div>
+
               <button
                 type="button"
-                onClick={() => setGroupBy('urgency')}
-                className={`px-2 py-0.5 rounded-md text-[11px] font-medium transition-colors ${
-                  groupBy === 'urgency'
-                    ? 'bg-slate-800 text-sky-400 shadow-sm'
-                    : 'text-slate-400 hover:text-slate-300'
-                }`}
+                onClick={() => setIsAddTaskOpen(true)}
+                className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700/80 text-xs font-medium flex items-center gap-1.5 transition-colors"
               >
-                Urgency
-              </button>
-              <button
-                type="button"
-                onClick={() => setGroupBy('none')}
-                className={`px-2 py-0.5 rounded-md text-[11px] font-medium transition-colors ${
-                  groupBy === 'none'
-                    ? 'bg-slate-800 text-sky-400 shadow-sm'
-                    : 'text-slate-400 hover:text-slate-300'
-                }`}
-              >
-                Chronological
+                <Plus className="w-3.5 h-3.5 text-sky-400" />
+                Add Personal Task
               </button>
             </div>
-          </div>
+          </section>
 
-          <button
-            type="button"
-            onClick={() => setIsAddTaskOpen(true)}
-            className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700/80 text-xs font-medium flex items-center gap-1.5 transition-colors"
-          >
-            <Plus className="w-3.5 h-3.5 text-sky-400" />
-            Add Personal Task
-          </button>
-        </div>
-      </section>
-
-      {/* Main Task List Area */}
-      <main className="flex-1 p-4 overflow-y-auto">
-        <TaskList
-          tasks={filteredTasks}
-          courses={courses}
-          onToggleComplete={handleToggleComplete}
-          onDelete={handleDelete}
-          onToggleSubTask={handleToggleSubTask}
-          onAddSubTask={handleAddSubTask}
-          groupBy={groupBy}
-          compact={false}
-        />
-      </main>
+          {/* Main Task List Area */}
+          <main className="flex-1 p-4 overflow-y-auto">
+            <TaskList
+              tasks={filteredTasks}
+              courses={courses}
+              onToggleComplete={handleToggleComplete}
+              onDelete={handleDelete}
+              onToggleSubTask={handleToggleSubTask}
+              onAddSubTask={handleAddSubTask}
+              groupBy={groupBy}
+              compact={false}
+            />
+          </main>
+        </>
+      ) : (
+        /* Tab 2: Announcements from all courses */
+        <main className="flex-1 p-4 overflow-y-auto">
+          <AnnouncementsView
+            announcements={announcements}
+            courses={courses}
+            onToggleRead={handleToggleAnnouncementRead}
+            onMarkAllRead={handleMarkAllAnnouncementsRead}
+            compact={false}
+          />
+        </main>
+      )}
 
       {/* Bottom Sticky Status / Quick Info Bar */}
       <footer className="sticky bottom-0 px-4 py-2.5 bg-slate-900/90 backdrop-blur-md border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">

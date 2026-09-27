@@ -138,6 +138,19 @@ export const SyncEngine = {
           await StorageService.upsertCourses(extractedCourses);
         }
 
+        // Sync announcements from all courses + institutional announcements
+        try {
+          const fetchedAnnouncements = await BlackboardApiService.fetchAllAnnouncements(
+            targetUrl,
+            allKnownCourses
+          );
+          if (fetchedAnnouncements.length > 0) {
+            await StorageService.upsertAnnouncements(fetchedAnnouncements);
+          }
+        } catch {
+          // Announcements sync error is non-fatal
+        }
+
         // Update settings lastSyncTime
         settings.lastSyncTime = new Date().toISOString();
         await StorageService.saveSettings(settings);
