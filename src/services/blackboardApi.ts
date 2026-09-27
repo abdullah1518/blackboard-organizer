@@ -469,7 +469,11 @@ export const BlackboardApiService = {
             parsedSec.code ||
             (!isNumericalOrInternalCode(secondaryId) ? secondaryId : '') ||
             (!isNumericalOrInternalCode(rawName) ? rawName : 'Course');
-          const name = parsed.name || parsedSec.name || (!isNumericalOrInternalCode(rawName) ? rawName : code);
+          // Preserve full course title from Blackboard (e.g. "261-SWE-387-01(Software Project Management)")
+          const name =
+            !isNumericalOrInternalCode(rawName) && rawName !== 'Course'
+              ? rawName
+              : parsed.fullName || parsed.name || parsedSec.name || code;
           const colorIndex = courseMap.size % colorPalette.length;
 
           if (rawId && code !== 'Course') {
@@ -507,10 +511,14 @@ export const BlackboardApiService = {
         results.forEach((cal: any) => {
           if (!cal.id) return;
           const parsed = parseBlackboardCourseString(cal.name || '');
-          if (parsed.code || (cal.name && !isNumericalOrInternalCode(cal.name))) {
+          const rawCalName = cal.name || '';
+          if (parsed.code || (rawCalName && !isNumericalOrInternalCode(rawCalName))) {
             const colorIndex = courseMap.size % colorPalette.length;
-            const code = parsed.code || cal.name;
-            const name = parsed.name || cal.name;
+            const code = parsed.code || rawCalName;
+            const name =
+              !isNumericalOrInternalCode(rawCalName) && rawCalName !== 'Course'
+                ? rawCalName
+                : parsed.fullName || parsed.name || rawCalName;
             const courseObj: Course = {
               id: cal.id,
               code,
@@ -713,7 +721,10 @@ export const BlackboardApiService = {
         const parsed = parseBlackboardCourseString(t.courseName || t.courseCode || t.courseId);
 
         let code = parsed.code || t.courseCode || '';
-        let name = parsed.name || t.courseName || '';
+        let name =
+          !isNumericalOrInternalCode(t.courseName) && t.courseName !== 'Course'
+            ? t.courseName
+            : parsed.fullName || parsed.name || t.courseCode || '';
 
         if (isNumericalOrInternalCode(code)) code = '';
         if (isNumericalOrInternalCode(name)) name = '';

@@ -111,7 +111,7 @@ export const AnnouncementCard: React.FC<AnnouncementCardProps> = ({
               className="w-1.5 h-1.5 rounded-full flex-shrink-0"
               style={{ backgroundColor: courseColor }}
             />
-            <span className="truncate max-w-[150px]">
+            <span className="truncate max-w-[280px] sm:max-w-[340px]">
               {getDisplayCourseName(course, {
                 courseName: announcement.courseName,
                 courseCode: announcement.courseCode,

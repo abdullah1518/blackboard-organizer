@@ -354,16 +354,22 @@ export const StorageService = {
       const existing = map.get(c.id);
       if (!existing) {
         map.set(c.id, c);
-      } else if (
-        isNumericalOrInternalCode(existing.name) ||
-        existing.name === 'Course' ||
-        isNumericalOrInternalCode(existing.code) ||
-        existing.code === 'Course'
-      ) {
+      } else {
+        const existingHasCleanName =
+          existing.name && !isNumericalOrInternalCode(existing.name) && existing.name !== 'Course';
+        const newHasCleanName =
+          c.name && !isNumericalOrInternalCode(c.name) && c.name !== 'Course';
+
+        // Prefer full title: e.g. "261-SWE-387-01(Software Project Management)" over short name or code
+        const isBetterName =
+          !existingHasCleanName ||
+          (newHasCleanName && (c.name.includes('(') || c.name.length > (existing.name?.length || 0)));
+
         map.set(c.id, {
           ...existing,
-          code: !isNumericalOrInternalCode(c.code) && c.code !== 'Course' ? c.code : existing.code,
-          name: !isNumericalOrInternalCode(c.name) && c.name !== 'Course' ? c.name : existing.name
+          code: c.code && !isNumericalOrInternalCode(c.code) && c.code !== 'Course' ? c.code : existing.code,
+          name: isBetterName && newHasCleanName ? c.name : existing.name,
+          term: c.term || existing.term
         });
       }
     });
@@ -371,7 +377,7 @@ export const StorageService = {
     const merged = Array.from(map.values());
     await this.saveCourses(merged);
 
-    // Self-healing: Update any tasks in storage that currently say 'Course'
+    // Self-healing: Update any tasks in storage that currently say 'Course' or have short names
     const tasks = await this.getTasks();
     let tasksUpdated = false;
 
@@ -392,13 +398,17 @@ export const StorageService = {
 
       if (matched) {
         const needsCodeFix = !t.courseCode || t.courseCode === 'Course' || isNumericalOrInternalCode(t.courseCode);
-        const needsNameFix = !t.courseName || t.courseName === 'Course' || isNumericalOrInternalCode(t.courseName);
+        const needsNameFix =
+          !t.courseName ||
+          t.courseName === 'Course' ||
+          isNumericalOrInternalCode(t.courseName) ||
+          (matched.name && matched.name !== t.courseName && matched.name.includes('('));
         if (needsCodeFix || needsNameFix) {
           tasksUpdated = true;
           return {
             ...t,
-            courseCode: matched.code,
-            courseName: matched.name
+            courseCode: matched.code || t.courseCode,
+            courseName: matched.name || t.courseName
           };
         }
       }

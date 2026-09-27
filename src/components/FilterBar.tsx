@@ -69,16 +69,17 @@ export const FilterBar: React.FC<FilterBarProps> = ({
           const hasCleanName = c.name && !isNumericalOrInternalCode(c.name) && c.name !== 'Course';
 
           const displayLabel =
-            hasCleanCode ? c.code :
             hasCleanName ? c.name :
-            parsed.code ? parsed.code :
+            hasCleanCode ? c.code :
+            parsed.fullName ? parsed.fullName :
             parsed.name ? parsed.name :
+            parsed.code ? parsed.code :
             'Course';
 
           const tooltip =
-            hasCleanCode && hasCleanName && c.code !== c.name
+            hasCleanCode && hasCleanName && c.code !== c.name && !c.name.includes(c.code)
               ? `${c.code} - ${c.name}`
-              : parsed.fullName || c.name || c.code;
+              : c.name || parsed.fullName || c.code;
 
           return (
             <button
@@ -99,7 +100,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
                 className="w-1.5 h-1.5 rounded-full flex-shrink-0"
                 style={{ backgroundColor: isSelected ? '#ffffff' : c.color }}
               />
-              <span className="truncate max-w-[120px]">{displayLabel}</span>
+              <span className="truncate max-w-[200px]">{displayLabel}</span>
             </button>
           );
         })}

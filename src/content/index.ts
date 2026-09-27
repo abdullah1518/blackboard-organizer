@@ -60,8 +60,32 @@ import { DomScraper } from './domScraper';
   }
 
   // Auto-notify background of active Blackboard session & detected courses
+  let lastDiscoveredCount = -1;
+  const notifyDiscoveredCourses = () => {
+    try {
+      const courses = DomScraper.scrapeCoursesFromDom();
+      if (courses.length > 0 && courses.length !== lastDiscoveredCount) {
+        lastDiscoveredCount = courses.length;
+        if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+          chrome.runtime.sendMessage({
+            type: 'COURSES_DETECTED',
+            domain: currentDomain,
+            url: window.location.href,
+            courses
+          }).catch(() => {});
+        }
+      }
+    } catch {
+      // Ignore
+    }
+  };
+
+  // Initial check
   if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
     const courses = DomScraper.scrapeCoursesFromDom();
+    if (courses.length > 0) {
+      lastDiscoveredCount = courses.length;
+    }
     chrome.runtime.sendMessage({
       type: 'SESSION_DETECTED',
       domain: currentDomain,
@@ -71,5 +95,24 @@ import { DomScraper } from './domScraper';
     }).catch(() => {
       // Ignored if extension background is waking up
     });
+  }
+
+  // Observe DOM for dynamically rendered h4 course cards (Blackboard Ultra Angular SPA)
+  try {
+    let debounceTimer: any = null;
+    const observer = new MutationObserver(() => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        notifyDiscoveredCourses();
+      }, 500);
+    });
+    if (document.body) {
+      observer.observe(document.body, {
+        childList: true,
+        subtree: true
+      });
+    }
+  } catch {
+    // Ignore in non-DOM or constrained envs
   }
 })();

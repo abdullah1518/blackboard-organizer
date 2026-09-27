@@ -90,10 +90,10 @@ function runCourseParsingTests() {
     title: 'Deliverable 1'
   };
   const display = getDisplayCourseName(undefined, testTask);
-  if (display !== 'SWE 387') {
-    throw new Error(`getDisplayCourseName should have parsed 'SWE 387' from task.courseId, got ${display}`);
+  if (display !== '261-SWE-387-01(Software Project Management)') {
+    throw new Error(`getDisplayCourseName should have returned '261-SWE-387-01(Software Project Management)' from task.courseId, got ${display}`);
   }
-  console.log('✅ Test 12: getDisplayCourseName correctly parsed "SWE 387" from task with "Course" defaults');
+  console.log('✅ Test 12: getDisplayCourseName correctly returned full title "261-SWE-387-01(Software Project Management)"');
 
   // Test 13: getDisplayCourseTooltip formats full name
   const courseObj = {
@@ -108,7 +108,20 @@ function runCourseParsingTests() {
   }
   console.log('✅ Test 13: getDisplayCourseTooltip correctly generated "BUS 200 - Business & Entrepreneurship"');
 
-  console.log('\n🎉 ALL 13 COURSE PARSING & TITLE EXTRACTION TESTS PASSED!\n');
+  // Test 14: getDisplayCourseName prioritizes full title from course.name
+  const courseFromH4 = {
+    id: '_15829_1',
+    code: 'SWE 387',
+    name: '261-SWE-387-01(Software Project Management)',
+    color: '#3B82F6'
+  };
+  const displayFromH4 = getDisplayCourseName(courseFromH4);
+  if (displayFromH4 !== '261-SWE-387-01(Software Project Management)') {
+    throw new Error(`Expected '261-SWE-387-01(Software Project Management)', got ${displayFromH4}`);
+  }
+  console.log('✅ Test 14: getDisplayCourseName correctly prioritized full title from course.name (h4 element)');
+
+  console.log('\n🎉 ALL 14 COURSE PARSING & TITLE EXTRACTION TESTS PASSED!\n');
 }
 
 runCourseParsingTests();

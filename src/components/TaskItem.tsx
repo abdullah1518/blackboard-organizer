@@ -24,25 +24,31 @@ export function getDisplayCourseName(
   const courseName = course?.name || task?.courseName;
   const courseCode = course?.code || task?.courseCode;
 
-  const hasCleanName = courseName && !isNumericalOrInternalCode(courseName);
-  const hasCleanCode = courseCode && !isNumericalOrInternalCode(courseCode);
+  const hasCleanName = courseName && !isNumericalOrInternalCode(courseName) && courseName !== 'Course';
+  const hasCleanCode = courseCode && !isNumericalOrInternalCode(courseCode) && courseCode !== 'Course';
 
-  if (hasCleanCode) {
-    return courseCode;
-  }
+  // Prioritize full course name as requested
   if (hasCleanName) {
     return courseName;
   }
+  if (hasCleanCode) {
+    return courseCode;
+  }
 
-  // Fallback: Try parsing from task title, courseName, or courseId
-  if (task?.title || task?.courseName || task?.courseId) {
+  // Fallback: Check task.courseId if it has a banner title or course code
+  if (task?.courseId && !isNumericalOrInternalCode(task.courseId) && task.courseId !== 'Course') {
+    return task.courseId;
+  }
+
+  // Fallback: Try parsing from task title or courseName
+  if (task?.title || task?.courseName) {
     const parsed =
-      (task.title && parseBlackboardCourseString(task.title).code ? parseBlackboardCourseString(task.title) : undefined) ||
-      (task.courseName && parseBlackboardCourseString(task.courseName).code ? parseBlackboardCourseString(task.courseName) : undefined) ||
-      (task.courseId ? parseBlackboardCourseString(task.courseId) : undefined);
+      (task.title && parseBlackboardCourseString(task.title).name ? parseBlackboardCourseString(task.title) : undefined) ||
+      (task.courseName && parseBlackboardCourseString(task.courseName).name ? parseBlackboardCourseString(task.courseName) : undefined);
 
-    if (parsed?.code) return parsed.code;
+    if (parsed?.fullName) return parsed.fullName;
     if (parsed?.name && !isNumericalOrInternalCode(parsed.name)) return parsed.name;
+    if (parsed?.code) return parsed.code;
   }
 
   return 'Course';
@@ -55,10 +61,10 @@ export function getDisplayCourseTooltip(
   const code = course?.code || task?.courseCode;
   const name = course?.name || task?.courseName;
 
-  const hasCleanCode = code && !isNumericalOrInternalCode(code);
-  const hasCleanName = name && !isNumericalOrInternalCode(name);
+  const hasCleanCode = code && !isNumericalOrInternalCode(code) && code !== 'Course';
+  const hasCleanName = name && !isNumericalOrInternalCode(name) && name !== 'Course';
 
-  if (hasCleanCode && hasCleanName && code !== name) {
+  if (hasCleanCode && hasCleanName && code !== name && !name.includes(code)) {
     return `${code} - ${name}`;
   }
   return hasCleanName ? name : hasCleanCode ? code : getDisplayCourseName(course, task);
@@ -218,7 +224,7 @@ export const TaskItem: React.FC<TaskItemProps> = ({
                 className="w-1.5 h-1.5 rounded-full flex-shrink-0"
                 style={{ backgroundColor: courseColor }}
               />
-              <span className="truncate max-w-[150px]">
+              <span className="truncate max-w-[280px] sm:max-w-[340px]">
                 {getDisplayCourseName(course, task)}
               </span>
             </span>

@@ -112,52 +112,76 @@ export const DomScraper = {
   },
 
   /**
-   * Scrapes Course records from Blackboard Ultra courses page (/ultra/course or /ultra/courses),
-   * activity stream (/ultra/stream), calendar (/ultra/calendar), or legacy pages
+   * Scrapes Course records from Blackboard Ultra courses page.
+   * Targets only the course title h4 elements:
+   * e.g. <h4 class="js-course-title-element ellipsis" id="course-name-_15829_1">261-SWE-387-01(Software Project Management)</h4>
    */
   scrapeCoursesFromDom(): Course[] {
     const courseMap = new Map<string, Course>();
     const colorPalette = ['#3B82F6', '#8B5CF6', '#EC4899', '#10B981', '#F59E0B', '#06B6D4', '#6366F1'];
 
-    const courseElements = document.querySelectorAll(
-      'a[href*="/ultra/courses/"], a[href*="courseMain"], [data-analytics-id*="course"], .course-element-card, div[role="group"], article, tr'
+    // Select course title h4 elements only, as requested
+    const courseH4Elements = document.querySelectorAll(
+      'h4.js-course-title-element, h4[id^="course-name-"], [id^="course-name-"].js-course-title-element, h4[ng-bind*="getCourseName"], h4.course-title, .js-course-title-element'
     );
 
-    courseElements.forEach((el) => {
+    courseH4Elements.forEach((h4) => {
       try {
-        const text = el.textContent?.trim() || '';
-        const href = el.getAttribute('href') || el.querySelector('a[href*="course"]')?.getAttribute('href') || '';
+        const fullTitle = (h4.textContent || h4.getAttribute('title') || '').replace(/\s+/g, ' ').trim();
+        if (!fullTitle || isNumericalOrInternalCode(fullTitle) || fullTitle.toLowerCase() === 'course') return;
 
-        const idMatch = href.match(/\/courses\/([^/?#]+)/) || href.match(/course_id=([^&#]+)/);
-        const internalId = idMatch ? idMatch[1] : undefined;
+        // 1. Extract course ID from id="course-name-_15829_1"
+        const idAttr = h4.getAttribute('id') || '';
+        let courseId = '';
+        const idMatch = idAttr.match(/^course-name-(.+)$/);
+        if (idMatch) {
+          courseId = idMatch[1].trim();
+        }
 
-        const headingEl = el.querySelector('h3, h4, .course-title, strong, a') || el;
-        const headingText = headingEl.textContent?.trim() || '';
-
-        const parsed = parseBlackboardCourseString(headingText).code
-          ? parseBlackboardCourseString(headingText)
-          : parseBlackboardCourseString(text);
-
-        if (parsed.code || (parsed.name && !isNumericalOrInternalCode(parsed.name))) {
-          const colorIndex = courseMap.size % colorPalette.length;
-          const courseId = internalId || parsed.code || `course_${courseMap.size}`;
-          const code = parsed.code || parsed.name!;
-          const name = parsed.name || parsed.code!;
-
-          const courseObj: Course = {
-            id: courseId,
-            code,
-            name,
-            color: colorPalette[colorIndex],
-            term: parsed.term
-          };
-
-          if (!courseMap.has(courseId)) {
-            courseMap.set(courseId, courseObj);
+        // 2. Check enclosing anchor or parent card if ID not on the h4 itself
+        if (!courseId) {
+          const parentLink =
+            h4.closest('a[href*="/courses/"]') ||
+            h4.closest('a[href*="course_id="]') ||
+            h4.parentElement?.querySelector('a[href*="/courses/"]') ||
+            h4.closest('.course-element-card, [role="group"], article, li, div')?.querySelector('a[href*="/courses/"]');
+          if (parentLink) {
+            const href = parentLink.getAttribute('href') || '';
+            const match = href.match(/\/courses\/([^/?#]+)/) || href.match(/course_id=([^&#]+)/);
+            if (match) courseId = match[1].trim();
           }
-          if (internalId && !courseMap.has(internalId)) {
-            courseMap.set(internalId, courseObj);
-          }
+        }
+
+        // 3. Check data-course-id or data-id attributes
+        if (!courseId) {
+          const dataId =
+            h4.getAttribute('data-course-id') ||
+            h4.closest('[data-course-id]')?.getAttribute('data-course-id') ||
+            h4.getAttribute('data-id');
+          if (dataId && !isNumericalOrInternalCode(dataId)) courseId = dataId;
+        }
+
+        // 4. Parse course code for searching and filtering (e.g. "SWE 387")
+        const parsed = parseBlackboardCourseString(fullTitle);
+        const code = parsed.code || fullTitle;
+        if (!courseId) {
+          courseId = code || `course_${courseMap.size}`;
+        }
+
+        const colorIndex = courseMap.size % colorPalette.length;
+        const courseObj: Course = {
+          id: courseId,
+          code,
+          name: fullTitle, // Full course title directly from the h4 element! e.g. "261-SWE-387-01(Software Project Management)"
+          color: colorPalette[colorIndex],
+          term: parsed.term
+        };
+
+        if (!courseMap.has(courseId)) {
+          courseMap.set(courseId, courseObj);
+        }
+        if (code && !courseMap.has(code)) {
+          courseMap.set(code, courseObj);
         }
       } catch {
         // Continue
