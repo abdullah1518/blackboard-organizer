@@ -188,6 +188,37 @@ export const DomScraper = {
       }
     });
 
+    // Fallback for older Blackboard Learn 9.1 (Original Experience) institutions if no Ultra h4 elements found
+    if (courseMap.size === 0) {
+      const legacyLinks = document.querySelectorAll(
+        '.courseListing a, #module_course_list a, a[href*="courseMain"], a[href*="/webapps/blackboard/execute/launcher?type=Course"]'
+      );
+      legacyLinks.forEach((a) => {
+        try {
+          const fullTitle = (a.textContent || a.getAttribute('title') || '').replace(/\s+/g, ' ').trim();
+          if (!fullTitle || isNumericalOrInternalCode(fullTitle) || fullTitle.toLowerCase() === 'course') return;
+          const href = a.getAttribute('href') || '';
+          const idMatch = href.match(/id=([^&#]+)/) || href.match(/course_id=([^&#]+)/);
+          const courseId = idMatch ? idMatch[1].trim() : `legacy_${courseMap.size}`;
+          const parsed = parseBlackboardCourseString(fullTitle);
+          const code = parsed.code || fullTitle;
+          const colorIndex = courseMap.size % colorPalette.length;
+          const courseObj: Course = {
+            id: courseId,
+            code,
+            name: fullTitle,
+            color: colorPalette[colorIndex],
+            term: parsed.term
+          };
+          if (!courseMap.has(courseId)) {
+            courseMap.set(courseId, courseObj);
+          }
+        } catch {
+          // Continue
+        }
+      });
+    }
+
     return Array.from(new Set(courseMap.values()));
   },
 
