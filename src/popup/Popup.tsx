@@ -180,7 +180,7 @@ export const Popup: React.FC = () => {
             </h1>
             <p className="text-[10px] text-slate-400">
               {pendingUrgentCount > 0 ? (
-                <span className="text-rose-400 font-medium">
+                <span className="text-orange-400 font-medium">
                   {pendingUrgentCount} due in &lt;24 hours
                 </span>
               ) : (

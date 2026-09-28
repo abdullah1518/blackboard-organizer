@@ -272,11 +272,11 @@ export const App: React.FC = () => {
                 <span className="text-base font-bold text-red-300">{overdueCount}</span>
               </div>
 
-              <div className="p-2 rounded-xl bg-rose-500/10 border border-rose-500/20">
-                <span className="text-[10px] font-medium text-rose-400 block uppercase tracking-wider">
+              <div className="p-2 rounded-xl bg-orange-500/10 border border-orange-500/20">
+                <span className="text-[10px] font-medium text-orange-400 block uppercase tracking-wider">
                   Due Today
                 </span>
-                <span className="text-base font-bold text-rose-300">{dueTodayCount}</span>
+                <span className="text-base font-bold text-orange-300">{dueTodayCount}</span>
               </div>
 
               <div className="p-2 rounded-xl bg-sky-500/10 border border-sky-500/20">

@@ -98,7 +98,7 @@ export const TaskList: React.FC<TaskListProps> = ({
       {groupBy === 'urgency' ? (
         <>
           {renderTaskSection('Overdue', overdueList, 'bg-red-500')}
-          {renderTaskSection('Due Today', todayList, 'bg-rose-500 animate-pulse')}
+          {renderTaskSection('Due Today', todayList, 'bg-orange-500 animate-pulse')}
           {renderTaskSection('Due This Week', soonList, 'bg-amber-500')}
           {renderTaskSection('Later', laterList, 'bg-emerald-500')}
         </>

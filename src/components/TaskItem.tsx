@@ -117,7 +117,7 @@ export const getUrgencyBadge = (dueDateStr: string, isCompleted: boolean) => {
     case 'today':
       return {
         text: diffHours <= 1 ? 'Due in <1 hour!' : `Due in ${diffHours}h`,
-        className: 'bg-rose-500/20 text-rose-300 border border-rose-500/30 font-semibold',
+        className: 'bg-orange-500/20 text-orange-300 border border-orange-500/30 font-semibold',
         icon: Clock
       };
     case 'soon':

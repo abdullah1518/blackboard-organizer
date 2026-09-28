@@ -25,7 +25,7 @@ export default {
         },
         urgency: {
           overdue: '#EF4444',
-          today: '#F43F5E',
+          today: '#F97316',
           soon: '#F59E0B',
           later: '#10B981',
         }
